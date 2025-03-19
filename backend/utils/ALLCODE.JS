@@ -15,6 +15,7 @@ import userRoutes from './routes/userRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
+import adminUserRoutes from './routes/adminUserRoutes.js';;
 import { sendContactEmail } from './controllers/contactController.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -33,14 +34,16 @@ const corsOptions = {
 
 };
 
+// ✅ Parse JSON and URL-encoded data first
+app.use(express.json({ limit: '500kb' }));
+app.use(express.urlencoded({ extended: true, limit: '500kb' }));
+
 app.use(cors(corsOptions));
 
 // Connect to MongoDB
 connectDB();
-
 // Middleware
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true }));
+
 app.use(cookieParser());
 
 
@@ -80,8 +83,10 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/categories', categoryRoutes);
-app.use('/api/settings', settingRoutes);
+app.use('/api/settings', settingRoutes); 
+app.use('/api/adminUser', adminUserRoutes);
 app.post('/api/send-email', sendContactEmail);
+
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -123,111 +128,10 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}/`);
-});  import mongoose from 'mongoose';
-
-const priceOptionSchema = new mongoose.Schema({
-    type: {
-        type: String,
-        enum: ['packet', 'weight-based'], // Defines if it's a fixed packet price or per specific weight
-        required: true
-    },
-    weight: {
-        type: Number, // Weight in grams (e.g., 100, 500)
-        required: true
-    },
-    price: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    salePrice: {
-        type: Number,
-        min: 0,
-        default: null
-    }
 });
 
-const productSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: [true, 'Please enter product name'],
-        trim: true,
-        maxlength: [120, 'Product name cannot exceed 120 characters']
-    },
-    description: {
-        type: String,
-        required: [true, 'Please enter product description']
-    },
-    categories: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Category'
-    }],
-    stock: {
-        type: Number,
-        required: true,
-        default: 0,
-        min: [0, 'Stock cannot be negative']
-    },
-    images: [{
-        public_id: {
-            type: String,
-            required: true
-        },
-        url: {
-            type: String,
-            required: true
-        }
-    }],
-    ratings: {
-        type: Number,
-        default: 0
-    },
-    numOfReviews: {
-        type: Number,
-        default: 0
-    },
-    slug: String,
-    priceOptions: [priceOptionSchema], // Array of packet or weight-based pricing
-    sale: {
-        type: Number,
-        min: 0,
-        default: null
-    } // Global sale on product
-}, {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
-});
-
-// Virtual populate reviews
-productSchema.virtual('reviews', {
-    ref: 'Review',
-    localField: '_id',
-    foreignField: 'product'
-});
-
-// Create a text index on the 'name' and 'description' fields for search functionality
-productSchema.index({ name: 'text', description: 'text' });
-
-export default mongoose.model('Product', productSchema);
-import mongoose from 'mongoose';
-
-const categorySchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true
-    },
-    description: String,
-    isActive: {
-        type: Boolean,
-        default: true
-    }
-}, { timestamps: true });
-
-export default mongoose.model('Category', categorySchema);
 import express from 'express';
+import { upload } from '../config/cloudinary.js';
 import {
     createCategory,
     getCategories,
@@ -239,66 +143,70 @@ import { protect, admin } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-router.post('/', protect, admin, createCategory);
+router.post('/', protect, admin, upload, createCategory);
 router.get('/', getCategories);
 router.get('/:id', getCategoryById);
-router.put('/:id', protect, admin, updateCategory);
+router.put('/:id', protect, admin, upload, updateCategory);
 router.delete('/:id', protect, admin, deleteCategory);
 
 export default router;
-import express from 'express';
-import {
-    getAllProducts,
-    searchProducts,
-    getProductById,
-    getRecentProducts,
-    createProduct,
-    updateProduct,
-    deleteProduct,
-    getProductsByCategories
-} from '../controllers/productController.js';
-import { protect, admin } from '../middlewares/auth.js';
-import { upload } from '../config/cloudinary.js';
+import mongoose from 'mongoose';
 
-const router = express.Router();
-
-router.get('/', getAllProducts);
-router.get('/recent', getRecentProducts);
-router.get('/by-categories', getProductsByCategories);
-
-router.get('/search', searchProducts);
-router.get('/:id', getProductById);
-
-router.post(
-    '/',
-    protect,
-    admin,
-    upload, // Handle image uploads
-    createProduct
+const categorySchema = new mongoose.Schema(
+    {
+        name: {
+            type: String,
+            required: true,
+            unique: true,
+            trim: true,
+        },
+        description: String,
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
+        images: [
+            {
+                public_id: {
+                    type: String,
+                    required: true,
+                },
+                url: {
+                    type: String,
+                    required: true,
+                },
+            },
+        ],
+    },
+    { timestamps: true }
 );
-router.put(
-    '/:id',
-    protect,
-    admin,
-    upload, // Handle image updates
-    updateProduct
-);
-router.delete('/:id', protect, admin, deleteProduct);
 
-export default router;import Category from '../models/category.js';
+export default mongoose.model('Category', categorySchema);
+import Category from '../models/category.js';
+import { deleteFromCloudinary } from '../config/cloudinary.js';
 
 // CREATE a new category (Admin only)
+
+// CREATE a new category with images (Admin only)
 export const createCategory = async (req, res) => {
-    console.log(req.body);
     try {
         const { name, description, isActive } = req.body;
-        const category = new Category({ name, description, isActive });
+
+        // Process uploaded images
+        const images = req.files.map((file) => ({
+            public_id: file.filename,
+            url: file.path,
+        }));
+
+        const category = new Category({ name, description, isActive, images });
         await category.save();
+
         res.status(201).json({ message: 'Category created successfully', category });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 };
+
 
 // READ all categories
 export const getCategories = async (req, res) => {
@@ -325,319 +233,97 @@ export const getCategoryById = async (req, res) => {
 export const updateCategory = async (req, res) => {
     try {
         const { name, description, isActive } = req.body;
-        const category = await Category.findByIdAndUpdate(
-            req.params.id,
-            { name, description, isActive },
-            { new: true, runValidators: true }
-        );
+        const category = await Category.findById(req.params.id);
+
         if (!category) return res.status(404).json({ error: 'Category not found' });
+
+        // If new images are uploaded, delete old images from Cloudinary
+        if (req.files.length > 0) {
+            for (let img of category.images) {
+                await deleteFromCloudinary(img.public_id);
+            }
+
+            category.images = req.files.map((file) => ({
+                public_id: file.filename,
+                url: file.path,
+            }));
+        }
+
+        category.name = name || category.name;
+        category.description = description || category.description;
+        category.isActive = isActive !== undefined ? isActive : category.isActive;
+
+        await category.save();
         res.json({ message: 'Category updated successfully', category });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 };
 
+
 // DELETE a category (Admin only)
 export const deleteCategory = async (req, res) => {
     try {
-        const category = await Category.findByIdAndDelete(req.params.id);
+        const category = await Category.findById(req.params.id);
         if (!category) return res.status(404).json({ error: 'Category not found' });
+
+        // Delete images from Cloudinary
+        for (let img of category.images) {
+            await deleteFromCloudinary(img.public_id);
+        }
+
+        await Category.findByIdAndDelete(req.params.id);
         res.json({ message: 'Category deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
-import Product from '../models/Product.js';
-import { handleResponse, handleError } from '../utils/responseHandler.js';
-import APIFeatures from '../utils/apiFeatures.js';
-import { deleteFromCloudinary } from '../config/cloudinary.js';
 
-// @desc    Get all products
-// @route   GET /api/products
-// @access  Public
-export const getAllProducts = async (req, res) => {
-    try {
-        const features = new APIFeatures(Product.find(), req.query)
-            .filter()
-            .sort()
-            .limitFields()
-            .paginate();
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
+import multer from 'multer';
+import dotenv from 'dotenv';
 
-        const products = await features.query;
-        const total = await Product.countDocuments(features.filterQuery);
+dotenv.config();
 
-        handleResponse(res, 200, 'Products retrieved successfully', {
-            products,
-            total,
-            results: products.length,
-            currentPage: features.page,
-            totalPages: Math.ceil(total / features.limit)
-        });
+// Cloudinary Configuration
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
-    } catch (error) {
-        handleError(res, 500, error.message);
-    }
-};
+// Multer Storage Configuration for Multiple Images
+const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => {
+        // Ensure that only valid image formats are uploaded (png, jpeg, jpg)
+        const allowedFormats = ['image/jpeg', 'image/png', 'image/jpg'];
+        const fileFormat = file.mimetype;
 
-// @desc    Get recent 6 products
-// @route   GET /api/products/recent
-// @access  Public
-export const getRecentProducts = async (req, res) => {
-    try {
-        const products = await Product.find().sort({ createdAt: -1 }).limit(6);
-        handleResponse(res, 200, 'Recent products retrieved successfully', products);
-    } catch (error) {
-        handleError(res, 500, error.message);
-    }
-};
-
-// @desc    Get products by categories
-// @route   GET /api/products/by-categories
-// @access  Public
-export const getProductsByCategories = async (req, res) => {
-    try {
-        const { categories } = req.query;
-        if (!categories) return handleError(res, 400, 'Categories query required');
-
-        const categoryList = categories.split(',');
-        const products = await Product.find({ categories: { $in: categoryList } });
-
-        // Shuffle and select 5 unique products
-        const shuffled = products.sort(() => 0.5 - Math.random());
-        handleResponse(res, 200, 'Products by categories retrieved successfully', shuffled.slice(0, 5));
-
-    } catch (error) {
-        handleError(res, 500, error.message);
-    }
-};
-
-// @desc    Search products
-// @route   GET /api/products/search
-// @access  Public
-export const searchProducts = async (req, res) => {
-    try {
-        const { q } = req.query;
-        if (!q) return handleError(res, 400, 'Search query required');
-
-        const products = await Product.find({
-            $text: { $search: q },
-            stock: { $gt: 0 }
-        }, {
-            score: { $meta: "textScore" }
-        }).sort({ score: { $meta: "textScore" } });
-
-        handleResponse(res, 200, 'Search results', products);
-
-    } catch (error) {
-        handleError(res, 500, error.message);
-    }
-};
-
-// @desc    Get single product
-// @route   GET /api/products/:id
-// @access  Public
-export const getProductById = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id)
-            .populate({
-                path: 'reviews',
-                select: 'rating comment user createdAt',
-                options: { sort: { createdAt: -1 } },
-                populate: { path: 'user', select: 'name' }
-            })
-            .populate({ path: 'categories', select: 'name' });
-
-        if (!product) return handleError(res, 404, 'Product not found');
-
-        handleResponse(res, 200, 'Product details retrieved', product);
-
-    } catch (error) {
-        error.name === 'CastError'
-            ? handleError(res, 400, 'Invalid product ID')
-            : handleError(res, 500, error.message);
-    }
-};
-
-// @desc    Create new product
-// @route   POST /api/products
-// @access  Admin
-export const createProduct = async (req, res) => {
-    try {
-        const { name, description, categories, stock, priceOptions, sale } = req.body;
-
-        // Validation
-        if (!name || !description || !categories || !stock || !priceOptions) {
-            return handleError(res, 400, "Missing required fields");
+        if (!allowedFormats.includes(fileFormat)) {
+            throw new Error("Only JPEG, PNG, or JPG images are allowed!");
         }
 
-        if (!Array.isArray(priceOptions) || priceOptions.length === 0) {
-            return handleError(res, 400, "Invalid price options");
-        }
+        return {
+            folder: "products",  // Folder in Cloudinary where images will be stored
+            format: fileFormat.split("/")[1], // Automatically detects format based on MIME type
+            public_id: `${file.originalname.split(".")[0]}_${Date.now()}`, // Ensure unique public ID
+        };
+    },
+});
 
-        for (const option of priceOptions) {
-            if (!['packet', 'weight-based'].includes(option.type)) {
-                return handleError(res, 400, "Invalid price option type");
-            }
-            if (option.weight <= 0 || option.price < 0) {
-                return handleError(res, 400, "Invalid weight or price values");
-            }
-        }
+// Multer Middleware for Multiple Images
+const upload = multer({
+    storage,
+    limits: {
+        fileSize: 5 * 1024 * 1024, // Limit file size to 5MB per image
+    },
+}).array("images", 10); // Handle up to 10 images
 
-        // Image handling
-        if (!req.files?.length) {
-            return handleError(res, 400, "At least one image required");
-        }
-
-        const images = req.files.map(file => ({
-            public_id: file.filename,
-            url: file.path
-        }));
-
-        // Check for existing product
-        const existingProduct = await Product.findOne({ name });
-        if (existingProduct) {
-            await cleanupImages(images);
-            return handleError(res, 400, "Product name exists");
-        }
-
-        // Create product
-        const product = await Product.create({
-            name,
-            slug: name.toLowerCase().replace(/ /g, "-"),
-            description,
-            categories: Array.isArray(categories) ? categories : categories.split(','),
-            stock,
-            priceOptions: priceOptions.map(option => ({
-                type: option.type,
-                weight: option.weight,
-                price: option.price,
-                salePrice: option.salePrice || null
-            })),
-            sale: sale || null,
-            images
-        });
-
-        handleResponse(res, 201, "Product created", product);
-
-    } catch (error) {
-        if (req.files?.length) {
-            await cleanupImages(req.files.map(f => ({ public_id: f.filename })));
-        }
-        handleError(res, 500, "Server error");
-    }
+// Generic delete function
+const deleteFromCloudinary = async (publicId) => {
+    await cloudinary.uploader.destroy(publicId);
 };
 
-// @desc    Update product
-// @route   PUT /api/products/:id
-// @access  Admin
-export const updateProduct = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) return handleError(res, 404, 'Product not found');
-
-        // Handle images
-        if (req.files?.length) {
-            const newImages = req.files.map(file => ({
-                public_id: file.public_id,
-                url: file.secure_url
-            }));
-            product.images = [...product.images, ...newImages];
-        }
-
-        if (req.body.imagesToDelete) {
-            await handleImageDeletions(req.body.imagesToDelete, product);
-        }
-
-        // Process updates
-        const updates = processUpdates(req.body);
-        const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
-            updates,
-            { new: true, runValidators: true }
-        );
-
-        handleResponse(res, 200, 'Product updated', updatedProduct);
-
-    } catch (error) {
-        if (req.files?.length) {
-            await cleanupImages(req.files.map(f => ({ public_id: f.public_id })));
-        }
-        handleValidationError(error, res);
-    }
-};
-
-// @desc    Delete product
-// @route   DELETE /api/products/:id
-// @access  Admin
-export const deleteProduct = async (req, res) => {
-    try {
-        const product = await Product.findById(req.params.id);
-        if (!product) return handleError(res, 404, 'Product not found');
-
-        await Promise.all(
-            product.images.map(img => deleteFromCloudinary(img.public_id))
-        );
-
-        await product.deleteOne();
-        handleResponse(res, 200, 'Product deleted');
-
-    } catch (error) {
-        error.name === 'CastError'
-            ? handleError(res, 400, 'Invalid product ID')
-            : handleError(res, 500, error.message);
-    }
-};
-
-// Helper functions
-const processUpdates = (body) => {
-    const updates = Object.keys(body)
-        .filter(key => !['imagesToDelete'].includes(key))
-        .reduce((acc, key) => {
-            acc[key] = body[key];
-            return acc;
-        }, {});
-
-    if (updates.name) {
-        updates.slug = updates.name.toLowerCase().replace(/ /g, '-');
-    }
-
-    if (updates.categories) {
-        updates.categories = Array.isArray(updates.categories)
-            ? updates.categories
-            : updates.categories.split(',');
-    }
-
-    if (updates.priceOptions) {
-        updates.priceOptions = updates.priceOptions.map(option => ({
-            type: option.type,
-            weight: option.weight,
-            price: option.price,
-            salePrice: option.salePrice || null
-        }));
-    }
-
-    return updates;
-};
-
-const handleImageDeletions = async (imagesToDelete, product) => {
-    await Promise.all(
-        imagesToDelete.map(async publicId => {
-            await deleteFromCloudinary(publicId);
-            product.images = product.images.filter(img => img.public_id !== publicId);
-        })
-    );
-};
-
-const cleanupImages = async (images) => {
-    await Promise.all(
-        images.map(img => deleteFromCloudinary(img.public_id))
-    );
-};
-
-const handleValidationError = (error, res) => {
-    if (error.name === 'ValidationError') {
-        const messages = Object.values(error.errors).map(val => val.message);
-        return handleError(res, 400, messages.join(', '));
-    }
-    handleError(res, 500, error.message);
-};
+export { upload, cloudinary, deleteFromCloudinary };

@@ -8,10 +8,11 @@ export const protect = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
 
     if (!token) return handleError(res, 401, 'Not authenticated');
-
+    console.log("kencike ec cds");
     try {
         const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
         req.user = await User.findById(decoded.id).select('-password');
+        
         next();
     } catch (error) {
         handleError(res, 401, 'Invalid token');
@@ -19,6 +20,9 @@ export const protect = async (req, res, next) => {
 };
 
 export const admin = (req, res, next) => {
-    if (req.user?.role === 'admin') return next();
+    if (req.user?.role === 'admin') {
+        console.log("dncnjd cjd jcd ")
+        return next()
+    };
     handleError(res, 403, 'Not authorized as admin');
 };
