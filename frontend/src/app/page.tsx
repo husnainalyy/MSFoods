@@ -10,7 +10,7 @@ export default function Home() {
         <div className="bg-[#FAF0E6]">  
             <HeroSection  />
             <Benefit className="md:py-20 py-10" />
-            <ProductGrid/>
+            {/* <ProductGrid/> */}
             <Contact/>
             <Newsletter  />
             <Footer/>

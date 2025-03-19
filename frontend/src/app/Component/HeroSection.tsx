@@ -1,6 +1,4 @@
-import { Leaf } from "lucide-react";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
 
 interface Hero115Props {
     icon?: React.ReactNode;
