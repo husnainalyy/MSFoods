@@ -12,7 +12,7 @@ export default function Home() {
             <Benefit className="md:py-20 py-10" />
             {/* <ProductGrid/> */}
             <Contact/>
-            <Newsletter  />
+            <Newsletter  />     
             <Footer/>
         </div>
     );
