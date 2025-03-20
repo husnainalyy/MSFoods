@@ -1,13 +1,34 @@
+<<<<<<< Updated upstream
+import type { Metadata } from "next"
+import { Geist, Azeret_Mono as Geist_Mono } from "next/font/google"
+import "./globals.css"
+import { Toaster } from "@/components/ui/toaster"
+import Header from "./Component/Header"
+import type React from "react"
+import { UserProvider } from "./Component/UserContext"
+import { CartProvider } from "./Component/CartContext"
+
+const geistSans = Geist({
+    variable: "--font-geist-sans",
+    subsets: ["latin"],
+})
+
+const geistMono = Geist_Mono({
+    variable: "--font-geist-mono",
+    subsets: ["latin"],
+})
+=======
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import Header from "./Component/Header";
 import type React from "react";
-import { UserProvider } from "./Component/UserContext";
+import { UserProvider } from "./Component/user-context";
 import { CartProvider } from "./Component/CartContext";
 
 const dmSans = DM_Sans({ subsets: ["latin"], weight: ["400", "500", "700"] });
+>>>>>>> Stashed changes
 
 export const metadata: Metadata = {
     title: "Peach Flask",
@@ -24,7 +45,11 @@ export default function RootLayout({
             <head>
                 <link rel="icon" href="/favicon.ico" sizes="any" />
             </head>
+<<<<<<< Updated upstream
+            <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+=======
             <body className={dmSans.className}>
+>>>>>>> Stashed changes
                 <UserProvider>
                     <CartProvider>
                         <Header />
