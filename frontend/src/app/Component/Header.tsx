@@ -69,7 +69,7 @@ const Header = () => {
 
   const menuVariants = {
     closed: {
-      x: "100%",
+      x: "-100%", // Change from "100%" to "-100%"
       transition: {
         type: "tween",
         duration: 0.3,
@@ -82,7 +82,8 @@ const Header = () => {
         duration: 0.3,
       },
     },
-  }
+  };
+  
 
   const navLinks = [
     { name: "Categories", href: "/categories", hasChildren: true },
