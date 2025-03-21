@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Menu,
   X,
@@ -23,6 +23,7 @@ import debounce from "lodash.debounce"
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.peachflask.com"
 
 const Header = () => {
+  const router = useRouter()
   const texts = ["Minimum Order Amount Rs 3,000", "Free Shipping on Orders Above Rs 5,000"]
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -323,6 +324,53 @@ const Header = () => {
     }
   }
 
+  // Handle product click with programmatic navigation
+  const handleProductClick = (productId) => {
+    console.log(`Navigating to product: ${productId}`)
+    setShowResults(false)
+    // Use window.location for direct navigation
+    window.location.href = `/product/${productId}`
+  }
+
+  // Render a product item
+  const renderProductItem = (product) => {
+    return (
+      <button
+        key={product._id}
+        onClick={() => handleProductClick(product._id)}
+        className="w-full text-left flex items-center p-2 hover:bg-gray-100 cursor-pointer border-0 bg-transparent"
+        style={{ pointerEvents: "auto" }}
+      >
+        <div className="w-16 h-16 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
+          <img
+            src={getProductImage(product) || "/placeholder.svg"}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+        <div className="ml-3 flex-1">
+          <div className="font-medium">
+            {typeof getProductPriceDisplay(product) === "string"
+              ? getProductPriceDisplay(product)
+              : getProductPriceDisplay(product)}
+          </div>
+          <div className="text-sm text-gray-700 flex justify-between">
+            <span>{product.name}</span>
+            {product.priceOptions && product.priceOptions.length > 0 && (
+              <span className="text-xs text-gray-500 ml-2">{getProductWeightDisplay(product)}</span>
+            )}
+          </div>
+          {isOnSale(product) && (
+            <div className="flex items-center mt-1">
+              <Tag className="h-3 w-3 text-red-600 mr-1" />
+              <span className="text-xs text-red-600">On Sale</span>
+            </div>
+          )}
+        </div>
+      </button>
+    )
+  }
+
   return (
     <header className="w-full">
       {/* Top announcement bar */}
@@ -387,7 +435,10 @@ const Header = () => {
 
                 {/* Search results dropdown */}
                 {showResults && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg z-50 border overflow-hidden">
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg z-[100] border overflow-hidden"
+                    style={{ pointerEvents: "auto" }}
+                  >
                     {/* Loading indicator */}
                     {isLoading && (
                       <div className="flex justify-center items-center p-4">
@@ -425,41 +476,7 @@ const Header = () => {
                     {!isLoading && searchResults.products.length > 0 && (
                       <div className="p-2">
                         <div className="px-3 py-2 font-medium">Products</div>
-                        {searchResults.products.map((product) => (
-                          <Link
-                            href={`/products/${product._id}`}
-                            key={product._id}
-                            className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => setShowResults(false)}
-                          >
-                            <div className="w-16 h-16 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
-                              <img
-                                src={getProductImage(product) || "/placeholder.svg"}
-                                alt={product.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="ml-3 flex-1">
-                              <div className="font-medium">
-                                {typeof getProductPriceDisplay(product) === "string"
-                                  ? getProductPriceDisplay(product)
-                                  : getProductPriceDisplay(product)}
-                              </div>
-                              <div className="text-sm text-gray-700 flex justify-between">
-                                <span>{product.name}</span>
-                                {product.priceOptions && product.priceOptions.length > 0 && (
-                                  <span className="text-xs text-gray-500 ml-2">{getProductWeightDisplay(product)}</span>
-                                )}
-                              </div>
-                              {isOnSale(product) && (
-                                <div className="flex items-center mt-1">
-                                  <Tag className="h-3 w-3 text-red-600 mr-1" />
-                                  <span className="text-xs text-red-600">On Sale</span>
-                                </div>
-                              )}
-                            </div>
-                          </Link>
-                        ))}
+                        {searchResults.products.map(renderProductItem)}
                       </div>
                     )}
                   </div>
@@ -546,7 +563,10 @@ const Header = () => {
 
           {/* Search results dropdown for mobile */}
           {showResults && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg z-50 border overflow-hidden">
+            <div
+              className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg z-[100] border overflow-hidden"
+              style={{ pointerEvents: "auto" }}
+            >
               {/* Loading indicator */}
               {isLoading && (
                 <div className="flex justify-center items-center p-4">
@@ -584,41 +604,7 @@ const Header = () => {
               {!isLoading && searchResults.products.length > 0 && (
                 <div className="p-2">
                   <div className="px-3 py-2 font-medium">Products</div>
-                  {searchResults.products.map((product) => (
-                    <Link
-                      href={`/product/${product._id}`}
-                      key={product._id}
-                      className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => (false)}
-                    >
-                      <div className="w-16 h-16 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
-                        <img
-                          src={getProductImage(product) || "/placeholder.svg"}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="ml-3 flex-1">
-                        <div className="font-medium">
-                          {typeof getProductPriceDisplay(product) === "string"
-                            ? getProductPriceDisplay(product)
-                            : getProductPriceDisplay(product)}
-                        </div>
-                        <div className="text-sm text-gray-700 flex justify-between">
-                          <span>{product.name}</span>
-                          {product.priceOptions && product.priceOptions.length > 0 && (
-                            <span className="text-xs text-gray-500 ml-2">{getProductWeightDisplay(product)}</span>
-                          )}
-                        </div>
-                        {isOnSale(product) && (
-                          <div className="flex items-center mt-1">
-                            <Tag className="h-3 w-3 text-red-600 mr-1" />
-                            <span className="text-xs text-red-600">On Sale</span>
-                          </div>
-                        )}
-                      </div>
-                    </Link>
-                  ))}
+                  {searchResults.products.map(renderProductItem)}
                 </div>
               )}
             </div>

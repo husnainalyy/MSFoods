@@ -7,7 +7,6 @@ export default function Home() {
         <div className="bg-light">  
             <Header/>
             <CategoryProducts/>
-            <Newsletter/>
             <Footer/>
         </div>
     );

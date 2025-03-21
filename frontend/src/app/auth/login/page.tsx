@@ -9,7 +9,6 @@ export default function Home() {
         <div className="bg-light">  
             <Header/>
             <LoginPage/>
-            <Newsletter/>
             <Footer/>
         </div>
     );
