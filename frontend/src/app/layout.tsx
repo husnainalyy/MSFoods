@@ -27,7 +27,6 @@ export default function RootLayout({
             <body className={dmSans.className}>
                 <UserProvider>
                     <CartProvider>
-                        <Header />
                         {children}
                         <Toaster />
                     </CartProvider>

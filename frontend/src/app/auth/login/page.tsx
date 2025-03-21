@@ -13,7 +13,7 @@ import { useState } from "react"
 import { Loader2, Mail, Phone } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {useUser} from "@/app/Component/user-context.tsx"
+import {useUser} from "@/app/Component/user-context"
 
 const emailLoginSchema = z.object({
     identifier: z.string().email("Invalid email address"),
@@ -101,8 +101,8 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-            <Card className="w-full max-w-md">
+        <div className="min-h-screen flex items-center justify-center bg-white p-4">
+            <Card className="w-full max-w-md bg-gray-50">
                 <CardHeader>
                     <CardTitle className="text-2xl">Welcome Back</CardTitle>
                     <CardDescription>Enter your credentials to login to your account</CardDescription>

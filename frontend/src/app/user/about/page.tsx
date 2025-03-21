@@ -1,141 +1,67 @@
-import Image from "next/image"
-import { ChevronRight, Users, Trophy, Rocket, Heart } from "lucide-react"
+import Image from "next/image";
+import Link from "next/link";
+import { Send, Facebook, Instagram, Youtube } from "lucide-react";
 
-export default function AboutPage() {
-    const values = [
-        {
-            icon: <Users className="h-6 w-6 text-blue-600" />,
-            title: "Customer First",
-            description: "We prioritize our customers in every decision we make, ensuring their success and satisfaction.",
-        },
-        {
-            icon: <Trophy className="h-6 w-6 text-yellow-500" />,
-            title: "Excellence",
-            description: "We maintain the highest standards in our products, services, and customer interactions.",
-        },
-        {
-            icon: <Rocket className="h-6 w-6 text-blue-600" />,
-            title: "Innovation",
-            description: "We continuously push boundaries to create better solutions for tomorrow's challenges.",
-        },
-        {
-            icon: <Heart className="h-6 w-6 text-yellow-500" />,
-            title: "Passion",
-            description: "Our dedication to excellence drives everything we do, from product design to customer service.",
-        },
-    ]
+export default function OurStory() {
+  return (
+    <div className="container mb-20 px-4 md:px-6">
 
-    return (
-        <div className="min-h-screen bg-white">
-            {/* Hero Section */}
-            <div
-                className="h-[60vh] bg-cover bg-center relative"
-                style={{
-                    backgroundImage:
-                        "url('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')",
-                }}
-            >
-                <div className="absolute inset-0 bg-gradient-to-r from-gray-900/90 to-gray-900/80">
-                    <div className="h-full max-w-7xl mx-auto px-4 flex flex-col justify-center">
-                        <div className="max-w-3xl">
-                            <div className="flex items-center space-x-2 text-sm text-gray-300 mb-6">
-                                <span>Home</span>
-                                <ChevronRight size={16} />
-                                <span>About</span>
-                            </div>
-                            <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-tight">
-                                Transforming Hydration with Innovation
-                            </h1>
-                            <p className="text-xl text-gray-300 leading-relaxed">
-                                At Peach Flask, we believe that staying hydrated should be both stylish and sustainable. Our mission is to craft premium-quality, eco-friendly bottles designed for everyday adventures—whether you are at the gym, the office, or exploring the great outdoors.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      {/* Page Title */}
+      <h1 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8">Our Story</h1>
 
-            <div className="max-w-7xl mx-auto">
-                {/* Introduction */}
-                <section className="px-4 py-24 bg-gray-50">
-                    <div className="max-w-3xl mx-auto text-center">
-                        <p className="text-xl  leading-relaxed">
-                            Founded in 2010, our journey began with a simple vision: to redefine hydration and online shopping through innovation, sustainability, and exceptional service. What started as a small operation has now evolved into a global brand, trusted by customers worldwide for quality, design, and durability.
+      {/* Main Image */}
+      <div className="mb-6 md:mb-8">
+        <Image 
+          src="/face.avif"
+          alt="MS Foods Founder" 
+          width={475} 
+          height={475}
+          className="w-full max-w-md mx-auto"
+        />
+      </div>
 
-                            We are committed to creating a better future—one bottle at a time. 🌍💧🍑
-                        </p>
-                    </div>
-                </section>
+      {/* Main Content */}
+      <div className="space-y-6 md:space-y-8">
+        <section>
+          <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">A Legacy of Purity and Taste</h2>
+          <p className="text-sm md:text-base text-gray-700">
+            Welcome to MS Foods, your trusted source for premium spices, dry fruits, and natural ingredients. Our journey is rooted in a passion for pure, high-quality flavors that bring warmth and authenticity to every meal.
+          </p>
+        </section>
 
-                {/* CEO Message */}
-                <section className="px-4 py-8 md:py-24 bg-gray-50">
-                    <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 items-center">
-                        <div className="order-2 md:order-1">
-                            <div className="space-y-8">
-                                <p className="text-lg text-gray-600 leading-relaxed">
-                                    At Peach Flask, we believe that hydration should be both stylish and sustainable. Our mission is to craft premium-quality, eco-friendly bottles designed for everyday adventures—whether you are at the gym, the office, or exploring the great outdoors.
+        <section>
+          <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">Our Commitment to Quality</h2>
+          <p className="text-sm md:text-base text-gray-700">
+            At MS Foods, we believe that great taste begins with the finest ingredients. We carefully source our spices and dry fruits from the best farms and suppliers, ensuring freshness, purity, and nutritional value. Our dedication to quality means that every product we offer is free from additives and preservatives—just nature’s goodness, as it should be.
+          </p>
+        </section>
 
-                                  
-                                </p>
-                                <p className="text-lg text-gray-600 leading-relaxed">
-                                    Made from high-grade, BPA-free materials, our bottles keep your drinks at the perfect temperature for hours, ensuring freshness with every sip. We are committed to sustainability, durability, and innovation, offering designs that blend function with aesthetics.
-                                    <br />
+        <section>
+          <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">How It All Began</h2>
+          <p className="text-sm md:text-base text-gray-700">
+            Our story began with a simple yet powerful idea: to provide families with premium spices and dry fruits that elevate everyday cooking. Founded in 2015, MS Foods started as a small business driven by a love for rich flavors and natural ingredients. What began as a local endeavor quickly grew into a brand recognized for its authenticity and excellence.
+          </p>
+          <p className="text-sm md:text-base text-gray-700 mt-3 md:mt-4">
+            From the very beginning, our philosophy has been simple—"Pure Ingredients, Pure Taste." We take pride in offering only the best, ensuring that every product delivers the highest standard of quality and taste.
+          </p>
+        </section>
 
-                                    Join us in making hydration effortless, eco-conscious, and stylish—one Peach Flask at a time. 🍑💧
-
-                                </p>
-                               
-                            </div>
-                        </div>
-                        <div className="order-1 md:order-2">
-                            <div className="aspect-[4/5] relative rounded-lg overflow-hidden shadow-2xl">
-                                <Image
-                                    src="/dall1.png"
-                                    alt="Our CEO"
-                                    layout="fill"
-                                    objectFit="cover"
-                                    className="transform transition-transform duration-500 hover:scale-105"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </section>
-                
-                {/* Values */}
-                <section className=" md:py-16 bg-gray-50">
-                    <div className="container mx-auto px-4">
-                        <h2 className="text-4xl font-bold text-center text-gray-800 mb-12">
-                            Our Core Values
-                        </h2>
-                        <div className="flex flex-wrap justify-center gap-8">
-                            {values.map((value, index) => (
-                                <div
-                                    key={index}
-                                    className="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col items-start w-full sm:w-80"
-                                >
-                                    <div className="p-3 rounded-full bg-indigo-100 mb-4">
-                                        {value.icon}
-                                    </div>
-                                    <h3 className="text-2xl font-semibold text-gray-900 mb-2">
-                                        {value.title}
-                                    </h3>
-                                    <p className="text-gray-600">{value.description}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                {/* Mission */}
-                <section className="px-4 pb-24 bg-gray-50">
-                    <div className="max-w-3xl mx-auto text-center">
-                        <h2 className="text-3xl font-bold mb-8">Our Mission</h2>
-                        <p className="text-lg text-gray-600 leading-relaxed">
-                            At Peach Flask, our mission is to redefine hydration by creating stylish, durable, and eco-friendly bottles that seamlessly fit into everyday life. We are committed to sustainability, using high-quality, BPA-free materials to reduce plastic waste and promote a greener future. Through continuous innovation, we design bottles that not only keep your drinks fresh but also complement your lifestyle. Customer satisfaction is at the heart of everything we do, ensuring every sip is refreshing and every purchase is worthwhile. With Peach Flask, hydration becomes more than just a habit—it’s a step towards a healthier, more sustainable world.
-                        </p>
-                    </div>
-                </section>
-            </div>
-        </div>
-    )
+        <section>
+          <h2 className="text-xl md:text-2xl font-bold mb-3 md:mb-4">Looking to the Future</h2>
+          <p className="text-sm md:text-base text-gray-700">
+            As we continue our journey, our mission remains the same: to bring you the best in spices, dry fruits, and natural food essentials. We are committed to sustainability, ethical sourcing, and maintaining the trust of our valued customers.
+          </p>
+          <p className="text-sm md:text-base text-gray-700 mt-3 md:mt-4">
+            Our future is about expanding our reach, introducing new flavors, and forming partnerships with farmers and suppliers who share our values. We aim to keep delivering products that enhance your culinary experiences while supporting a healthier lifestyle.
+          </p>
+          <p className="text-sm md:text-base text-gray-700 mt-3 md:mt-4">
+            Thank you for being part of the MS Foods family. Together, we celebrate the art of cooking with pure, flavorful, and wholesome ingredients.
+          </p>
+          <p className="text-sm md:text-base text-gray-700 mt-3 md:mt-4">
+            Stay connected with us for updates, recipes, and more! Follow us on <Link href="https://instagram.com/msfoods" className="text-primary hover:underline">Instagram</Link> @msfoods.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
 }
-

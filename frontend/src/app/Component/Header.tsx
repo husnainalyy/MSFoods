@@ -233,7 +233,7 @@ const Header = () => {
     { name: "Categories", href: "/categories", hasChildren: false },
     { name: "Our Products", href: "/products" },
     { name: "Reviews", href: "/reviews" },
-    { name: "About us", href: "/about-us" },
+    { name: "About us", href: "/user/about" },
     { name: "Contact Us", href: "/contact" },
   ]
 

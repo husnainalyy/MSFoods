@@ -8,9 +8,11 @@ import Categories from "./Component/Categories";
 import LifestyleCategories from "./Component/Lifestyle";
 import ReviewsSection from "./Component/Reviews";
 import Image from "./Component/Image";
+import Header from "./Component/Header";
 export default function Home() {
     return (
-        <div className="bg-light">  
+        <div className="bg-light"> 
+            <Header />
             <HeroSection  />
             <ProductGrid/>
             <Message />
