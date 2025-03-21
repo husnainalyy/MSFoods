@@ -1,10 +1,10 @@
-import Footer from "../../Component/Footer";
-import ProductGrid from "../../Component/OurProducts";
+import Categories from "../Component/Categories";
+import Footer from "../Component/Footer";
 
 export default function Home() {
     return (
         <div className="bg-light">  
-            <ProductGrid/>
+            <Categories/>
             <Footer/>
         </div>
     );

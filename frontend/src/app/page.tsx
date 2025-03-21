@@ -7,7 +7,7 @@ import Message from "./Component/Message";
 import Categories from "./Component/Categories";
 import LifestyleCategories from "./Component/Lifestyle";
 import ReviewsSection from "./Component/Reviews";
-
+import Image from "./Component/Image";
 export default function Home() {
     return (
         <div className="bg-light">  
@@ -16,6 +16,7 @@ export default function Home() {
             <Message />
             <Categories/>
             <LifestyleCategories/>
+            <Image />
             <ReviewsSection/>
             <Contact/>
             <Newsletter  />

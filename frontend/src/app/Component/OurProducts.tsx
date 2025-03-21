@@ -91,47 +91,60 @@ export default function ProductGrid() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {products.map((product) => {
-          const sortedPrices = product.priceOptions.sort((a, b) => a.price - b.price);
-          const lowestPriceOption = sortedPrices[0];
-          const displayPrice = lowestPriceOption?.salePrice || lowestPriceOption?.price;
+  {products.map((product) => {
+    const sortedPrices = product.priceOptions.sort((a, b) => a.price - b.price);
+    const lowestPriceOption = sortedPrices[0];
+    const displayPrice = lowestPriceOption?.salePrice || lowestPriceOption?.price;
 
-          return (
-            <div key={product._id} className="border border-gray-200 rounded-lg overflow-hidden group">
-              <Link href={`/products/${product.slug}`}>
-                <div className="aspect-square relative ">
-                  <Image
-                    src={product.images[0]?.url || "/placeholder.svg"}
-                    alt={product.name}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300 ease-in-out"
-                  />
-                </div>
+    return (
+      <div
+        key={product._id}
+        className="border border-gray-200 rounded-lg overflow-hidden group flex flex-col"
+      >
+        <Link href={`/product/${product._id}`} className="flex-grow flex flex-col">
+          {/* Product Image */}
+          <div className="aspect-square relative">
+            <Image
+              src={product.images[0]?.url || "/placeholder.svg"}
+              alt={product.name}
+              fill
+              className="object-cover group-hover:scale-105 transition-transform duration-300 ease-in-out"
+            />
+          </div>
 
-                <div className="p-5">
-                  <div className="text-[14px] text-[#1D1D1D]">
-                    {product.priceOptions.length>1 ? "From " :""}{displayPrice ? `Rs. ${displayPrice.toFixed(2)}` : "Price not available"}
-                  </div>
-                  <div className="relative group">
-                  <h3 className="font-semibold text-[17px] md:text-2xl md:font-bold mt-1 relative after:content-[''] after:block after:w-full after:h-[2px] after:bg-black after:scale-x-0 after:transition-transform after:duration-300 after:origin-left group-hover:after:scale-x-100">{product.name}</h3>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    className="w-full mt-3 rounded-full border-black hover:bg-black hover:text-white"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleBuyNow(product);
-                    }}
-                  >
-                    Buy now
-                  </Button>
-                </div>
-              </Link>
+          {/* Product Info */}
+          <div className="p-5 flex flex-col flex-grow">
+            <div className="text-[14px] text-[#1D1D1D]">
+              {product.priceOptions.length > 1 ? "From " : ""}
+              {displayPrice ? `Rs. ${displayPrice.toFixed(2)}` : "Price not available"}
             </div>
-          );
-        })}
+
+            <div className="relative group flex-grow">
+              <h3 className="font-semibold text-[17px] md:text-2xl md:font-bold mt-1 relative after:content-[''] after:block after:w-full after:h-[2px] after:bg-black after:scale-x-0 after:transition-transform after:duration-300 after:origin-left group-hover:after:scale-x-100">
+                {product.name}
+              </h3>
+            </div>
+          </div>
+        </Link>
+
+        {/* Buy Now Button - Fixed at Bottom */}
+        <div className="p-5 pt-0 mt-auto">
+          <Button
+            variant="outline"
+            className="w-full rounded-full border-black hover:bg-black hover:text-white"
+            onClick={(e) => {
+              e.preventDefault();
+              handleBuyNow(product);
+            }}
+          >
+            Buy now
+          </Button>
+        </div>
       </div>
+    );
+  })}
+</div>;
+
     </div>
   );
 }

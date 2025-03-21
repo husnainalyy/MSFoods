@@ -231,11 +231,10 @@ const Header = () => {
 
   const navLinks = [
     { name: "Categories", href: "/categories", hasChildren: false },
-    { name: "Our story", href: "/our-story" },
-    { name: "Suppliers", href: "/suppliers" },
-    { name: "Careers", href: "/careers" },
-    { name: "Blog", href: "/blog" },
-    { name: "FAQs", href: "/faqs" },
+    { name: "Our Products", href: "/products" },
+    { name: "Reviews", href: "/reviews" },
+    { name: "About us", href: "/about-us" },
+    { name: "Contact Us", href: "/contact" },
   ]
 
   // Handle search input
@@ -356,7 +355,7 @@ const Header = () => {
             </button>
 
             {/* Logo */}
-            <Link href="/" className="text-3xl font-bold tracking-tighter me-4">
+            <Link href="/" className="ms-4 text-3xl font-bold tracking-tighter me-4">
               MS Foods
             </Link>
 
@@ -587,10 +586,10 @@ const Header = () => {
                   <div className="px-3 py-2 font-medium">Products</div>
                   {searchResults.products.map((product) => (
                     <Link
-                      href={`/products/${product._id}`}
+                      href={`/product/${product._id}`}
                       key={product._id}
                       className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => setShowResults(false)}
+                      onClick={() => (false)}
                     >
                       <div className="w-16 h-16 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
                         <img

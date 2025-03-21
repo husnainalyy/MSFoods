@@ -88,31 +88,12 @@ export default function ReviewsSection() {
   }, [])
 
   return (
-    <section className="w-full">
+    <section className="container mx-auto px-4 py-8">
       {/* Hero Image - Different for mobile and desktop */}
-      <div className="relative w-full h-[300px] md:h-[500px]">
-        {/* Mobile Image */}
-        <div className="block md:hidden w-full h-full">
-          <Image
-            src="/SWITCH-2.avif"
-            alt="Reviews hero mobile"
-            fill
-            className="object-cover"
-            priority
-          />
-        </div>
-
-        {/* Desktop Image */}
-        <div className="hidden md:block w-full h-full">
-          <Image
-            src="/SWITCH.webp"
-            alt="Reviews hero desktop"
-            fill
-            className="object-cover"
-            priority
-          />
-        </div>
+      <div className="flex justify-between items-center ms-4 mb-6">
+        <h2 className="text-2xl font-bold">Hear From Our Customers</h2>
       </div>
+      
 
       {/* Reviews Carousel */}
       <div className="w-full bg-[#f2f1ea] py-16 px-4 md:py-24 md:px-8">

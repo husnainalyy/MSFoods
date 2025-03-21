@@ -1,11 +1,10 @@
-import AllProducts from "../Component/AllProducts";
 import Footer from "../Component/Footer";
-import ProductGrid from "../Component/OurProducts";
+import ReviewsSection from "../Component/Reviews";
 
 export default function Home() {
     return (
         <div className="bg-light">  
-            <AllProducts/>
+            <ReviewsSection/>
             <Footer/>
         </div>
     );
