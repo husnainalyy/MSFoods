@@ -1,16 +1,13 @@
-import AllProducts from "../Component/AllProducts";
+import Categories from "../Component/Categories";
 import Footer from "../Component/Footer";
-import ProductGrid from "../Component/OurProducts";
-import Header from "../Component/Header";
 import Newsletter from "@/app/Component/Newsletter";
-
+import Header from "@/app/Component/Header";
 
 export default function Home() {
     return (
         <div className="bg-light">  
-            <Header />
-            <AllProducts/>
-            <Newsletter/>
+            <Header/>
+            <Categories/>
             <Footer/>
         </div>
     );

@@ -1,14 +1,12 @@
-import OurStory from "@/app/Component/OurStory";
 import Footer from "../../Component/Footer";
-import ReviewsSection from "../../Component/Reviews";
+import CategoryProducts from "@/app/Component/CategoryProducts";
 import Header from "@/app/Component/Header";
 import Newsletter from "@/app/Component/Newsletter";
-
 export default function Home() {
     return (
         <div className="bg-light">  
             <Header/>
-            <OurStory/>
+            <CategoryProducts/>
             <Footer/>
         </div>
     );

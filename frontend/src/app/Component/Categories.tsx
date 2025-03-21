@@ -92,7 +92,7 @@ export default function Categories() {
         key={category._id}
         className="overflow-hidden rounded-2xl shadow-md transition-transform duration-300 ease-in-out hover:scale-102"
       >
-        <Link href={`/categories/${category.slug}`} className="block">
+        <Link href={`/products/${category.name}`} className="block">
           {/* Image container - takes up about 70% of the card height */}
           <div className="relative w-full aspect-[4/3]">
             <Image
