@@ -8,10 +8,7 @@ export default function AdminLayout({
 }) {
     return (
         <div className="">
-            
             {children}
-            <Newsletter/>
-            <Footer/>
         </div>
     );
 }
