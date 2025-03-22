@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/use-toast"
-import { ChevronDown, X, Filter } from "lucide-react"
+import { X, Filter, Check, Tag, Package, Clock, ArrowUpDown } from "lucide-react"
 import { useParams } from "next/navigation"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.peachflask.com"
@@ -51,6 +51,7 @@ interface FilterState {
     outOfStock: boolean
   }
   categories: Record<string, boolean>
+  onSale: boolean
 }
 
 export default function CategoryProducts() {
@@ -69,21 +70,13 @@ export default function CategoryProducts() {
       outOfStock: false,
     },
     categories: {},
+    onSale: false,
   })
   const [sortBy, setSortBy] = useState<SortOption>("featured")
 
-  // Mobile filter panel states with separate animation state
-  const [showMobileFilter, setShowMobileFilter] = useState(false)
-  const [animateMobileFilter, setAnimateMobileFilter] = useState(false)
-
-  // Accordion states for mobile filter panel
-  const [availabilityAccordionOpen, setAvailabilityAccordionOpen] = useState(false)
-  const [categoriesAccordionOpen, setCategoriesAccordionOpen] = useState(false)
-
-  // Dropdown states for desktop
-  const [availabilityOpen, setAvailabilityOpen] = useState(false)
-  const [categoriesOpen, setCategoriesOpen] = useState(false)
-  const [sortOpen, setSortOpen] = useState(false)
+  // Filter panel states
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [activeFilterTab, setActiveFilterTab] = useState<"categories" | "availability" | "sort">("categories")
 
   // Refs for timeouts
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -134,12 +127,12 @@ export default function CategoryProducts() {
     applyFiltersAndSort()
   }, [products, filters, sortBy])
 
-  // Close mobile filter panel when clicking outside
+  // Close filter panel when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
-      if (showMobileFilter && !target.closest(".mobile-filter-panel")) {
-        closeMobileFilter()
+      if (showFilterPanel && !target.closest(".filter-panel") && !target.closest(".filter-toggle")) {
+        setShowFilterPanel(false)
       }
     }
 
@@ -147,7 +140,7 @@ export default function CategoryProducts() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [showMobileFilter])
+  }, [showFilterPanel])
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -221,6 +214,13 @@ export default function CategoryProducts() {
     }
   }
 
+  const handleOnSaleChange = () => {
+    setFilters((prev) => ({
+      ...prev,
+      onSale: !prev.onSale,
+    }))
+  }
+
   const applyFiltersAndSort = () => {
     // Apply filters
     let result = [...products]
@@ -232,6 +232,13 @@ export default function CategoryProducts() {
         if (filters.availability.inStock && product.stock > 0) return true
         if (filters.availability.outOfStock && product.stock === 0) return true
         return false
+      })
+    }
+
+    // Filter by on sale
+    if (filters.onSale) {
+      result = result.filter((product) => {
+        return product.priceOptions.some((option) => option.salePrice !== null && option.salePrice !== undefined)
       })
     }
 
@@ -313,7 +320,7 @@ export default function CategoryProducts() {
     }))
   }
 
-  const resetFilters = (filterType: "availability" | "categories") => {
+  const resetFilters = (filterType: "availability" | "categories" | "all") => {
     if (filterType === "availability") {
       setFilters((prev) => ({
         ...prev,
@@ -335,6 +342,23 @@ export default function CategoryProducts() {
 
       // Reset the initialFilterApplied flag so we can reapply if needed
       initialFilterApplied.current = false
+    } else if (filterType === "all") {
+      const resetCategories: Record<string, boolean> = {}
+      Object.keys(filters.categories).forEach((key) => {
+        resetCategories[key] = false
+      })
+
+      setFilters({
+        availability: {
+          inStock: false,
+          outOfStock: false,
+        },
+        categories: resetCategories,
+        onSale: false,
+      })
+
+      // Reset the initialFilterApplied flag so we can reapply if needed
+      initialFilterApplied.current = false
     }
   }
 
@@ -344,6 +368,10 @@ export default function CategoryProducts() {
     } else {
       return Object.values(filters.categories).filter(Boolean).length
     }
+  }
+
+  const getTotalSelectedFilters = () => {
+    return getSelectedCount("availability") + getSelectedCount("categories") + (filters.onSale ? 1 : 0)
   }
 
   const handleBuyNow = (product: Product) => {
@@ -374,25 +402,41 @@ export default function CategoryProducts() {
     }
   }
 
-  const openMobileFilter = () => {
-    // First make the panel visible
-    setShowMobileFilter(true)
-    // Then trigger the animation after a tiny delay to ensure DOM update
-    setTimeout(() => {
-      setAnimateMobileFilter(true)
-    }, 10)
+  const getActiveFilters = () => {
+    const active = []
+
+    if (filters.onSale) {
+      active.push({ type: "onSale", label: "On Sale" })
+    }
+
+    if (filters.availability.inStock) {
+      active.push({ type: "availability", key: "inStock", label: "In Stock" })
+    }
+
+    if (filters.availability.outOfStock) {
+      active.push({ type: "availability", key: "outOfStock", label: "Out of Stock" })
+    }
+
+    Object.entries(filters.categories).forEach(([key, value]) => {
+      if (value) {
+        const category = categories.find((c) => c._id === key)
+        if (category) {
+          active.push({ type: "category", key, label: category.name })
+        }
+      }
+    })
+
+    return active
   }
 
-  const closeMobileFilter = () => {
-    // First reverse the animation
-    setAnimateMobileFilter(false)
-    // Then hide the panel after animation completes
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current)
+  const removeFilter = (filter: { type: string; key?: string; label: string }) => {
+    if (filter.type === "onSale") {
+      setFilters((prev) => ({ ...prev, onSale: false }))
+    } else if (filter.type === "availability" && filter.key) {
+      handleAvailabilityChange(filter.key as "inStock" | "outOfStock")
+    } else if (filter.type === "category" && filter.key) {
+      handleCategoryChange(filter.key)
     }
-    animationTimeoutRef.current = setTimeout(() => {
-      setShowMobileFilter(false)
-    }, 300) // Match this with the CSS transition duration
   }
 
   if (isLoading) {
@@ -409,6 +453,7 @@ export default function CategoryProducts() {
 
   const inStockCount = products.filter((p) => p.stock > 0).length
   const outOfStockCount = products.filter((p) => p.stock === 0).length
+  const activeFilters = getActiveFilters()
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -416,355 +461,290 @@ export default function CategoryProducts() {
         <h2 className="text-2xl font-bold">{categoryName ? `All ${categoryName}` : "All Products"}</h2>
       </div>
 
-      {/* Desktop Filters - Hidden on mobile */}
-      <div className="hidden md:flex md:flex-row justify-between items-start mb-6">
-        <div className="flex flex-wrap gap-4 mb-4 md:mb-0">
-          <div className="text-base font-medium">Filter:</div>
-
-          {/* Availability Filter */}
-          <div className="relative">
-            <button
-              className="flex items-center justify-between min-w-[200px] px-4 py-2 border rounded-lg"
-              onClick={() => {
-                setAvailabilityOpen(!availabilityOpen)
-                setCategoriesOpen(false)
-                setSortOpen(false)
-              }}
-            >
-              <span>Availability</span>
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </button>
-
-            {availabilityOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border rounded-lg shadow-lg">
-                <div className="p-3 border-b flex justify-between items-center">
-                  <span>{getSelectedCount("availability")} selected</span>
-                  <button className="text-black underline" onClick={() => resetFilters("availability")}>
-                    Reset
-                  </button>
-                </div>
-                <div className="p-3">
-                  <label className="flex items-center space-x-2 mb-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={filters.availability.inStock}
-                      onChange={() => handleAvailabilityChange("inStock")}
-                    />
-                    <span>In stock ({inStockCount})</span>
-                  </label>
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4"
-                      checked={filters.availability.outOfStock}
-                      onChange={() => handleAvailabilityChange("outOfStock")}
-                    />
-                    <span>Out of stock ({outOfStockCount})</span>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Categories Filter */}
-          <div className="relative">
-            <button
-              className="flex items-center justify-between min-w-[200px] px-4 py-2 border rounded-lg"
-              onClick={() => {
-                setCategoriesOpen(!categoriesOpen)
-                setAvailabilityOpen(false)
-                setSortOpen(false)
-              }}
-            >
-              <span>Categories</span>
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </button>
-
-            {categoriesOpen && (
-              <div className="absolute z-10 mt-1 w-full bg-white border rounded-lg shadow-lg">
-                <div className="p-3 border-b flex justify-between items-center">
-                  <span>{getSelectedCount("categories")} selected</span>
-                  <button className="text-black underline" onClick={() => resetFilters("categories")}>
-                    Reset
-                  </button>
-                </div>
-                <div className="p-3 max-h-[300px] overflow-y-auto">
-                  {categories.length > 0 ? (
-                    categories.map((category) => {
-                      // Count products in this category
-                      const count = products.filter((p) => {
-                        if (typeof p.categories[0] === "string") {
-                          return (p.categories as string[]).includes(category._id)
-                        } else {
-                          return (p.categories as Category[]).some((c) => c._id === category._id)
-                        }
-                      }).length
-
-                      return (
-                        <label key={category._id} className="flex items-center space-x-2 mb-2">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={filters.categories[category._id] || false}
-                            onChange={() => handleCategoryChange(category._id)}
-                          />
-                          <span>
-                            {category.name} ({count})
-                          </span>
-                        </label>
-                      )
-                    })
-                  ) : (
-                    <div className="py-2 text-gray-500">No categories available</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Sort By - Desktop */}
-        <div className="flex items-center">
-          <div className="text-base font-medium mr-2">Sort by:</div>
-          <div className="relative">
-            <button
-              className="flex items-center justify-between min-w-[200px] px-4 py-2 border rounded-lg"
-              onClick={() => {
-                setSortOpen(!sortOpen)
-                setAvailabilityOpen(false)
-                setCategoriesOpen(false)
-              }}
-            >
-              <span>{getSortLabel(sortBy)}</span>
-              <ChevronDown className="ml-2 h-4 w-4" />
-            </button>
-
-            {sortOpen && (
-              <div className="absolute right-0 z-10 mt-1 w-full bg-white border rounded-lg shadow-lg">
-                {[
-                  "featured" as SortOption,
-                  "alphabetical-asc" as SortOption,
-                  "alphabetical-desc" as SortOption,
-                  "price-asc" as SortOption,
-                  "price-desc" as SortOption,
-                  "date-asc" as SortOption,
-                  "date-desc" as SortOption,
-                ].map((option) => (
-                  <button
-                    key={option}
-                    className={`block w-full text-left px-4 py-2 hover:bg-blue-500 hover:text-white ${
-                      sortBy === option ? "bg-blue-500 text-white" : ""
-                    }`}
-                    onClick={() => {
-                      setSortBy(option)
-                      setSortOpen(false)
-                    }}
-                  >
-                    {getSortLabel(option)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Filter Button - Visible only on mobile */}
-      <div className="md:hidden mb-4">
-        <button
-          onClick={openMobileFilter}
-          className="flex items-center justify-center gap-2 w-full max-w-[200px] py-3 px-4 border border-gray-300 rounded-full"
-        >
-          <Filter className="h-4 w-4" />
-          <span>Filter and sort</span>
-        </button>
-
-        <div className="mt-2 text-gray-600">
-          {filteredProducts.length} product{filteredProducts.length !== 1 ? "s" : ""}
-        </div>
-      </div>
-
-      {/* Mobile Filter Panel - Slide in from right with animation */}
-      {showMobileFilter && (
-        <div
-          className={`fixed inset-0 bg-black z-50 md:hidden transition-opacity duration-300 ease-in-out ${
-            animateMobileFilter ? "bg-opacity-50" : "bg-opacity-0"
-          }`}
-          style={{ pointerEvents: animateMobileFilter ? "auto" : "none" }}
-        >
-          <div
-            className={`mobile-filter-panel fixed top-0 right-0 h-full w-full max-w-[400px] bg-white shadow-lg transform transition-transform duration-300 ease-in-out overflow-y-auto ${
-              animateMobileFilter ? "translate-x-0" : "translate-x-full"
+      {/* New Filter Design */}
+      <div className="mb-6">
+        {/* Filter Toggle Button */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <button
+            onClick={() => setShowFilterPanel(!showFilterPanel)}
+            className={`filter-toggle flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+              showFilterPanel ? "bg-black text-white" : "bg-gray-100 hover:bg-gray-200"
             }`}
-            style={{ willChange: "transform" }}
           >
-            {/* Header */}
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-medium">Filter and sort</h3>
-              <button onClick={closeMobileFilter} className="p-1">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
+            <Filter className="h-4 w-4" />
+            <span>Filters</span>
+            {getTotalSelectedFilters() > 0 && (
+              <span className="inline-flex items-center justify-center w-5 h-5 ml-1 text-xs font-medium rounded-full bg-primary text-white">
+                {getTotalSelectedFilters()}
+              </span>
+            )}
+          </button>
 
-            {/* Filter Accordions */}
-            <div className="divide-y">
-              {/* Availability Accordion */}
-              <div className="py-3 px-4">
-                <button
-                  className="flex justify-between items-center w-full py-2"
-                  onClick={() => setAvailabilityAccordionOpen(!availabilityAccordionOpen)}
-                >
-                  <span className="text-base font-medium">Availability</span>
-                  <ChevronDown
-                    className={`h-5 w-5 transition-transform duration-200 ${availabilityAccordionOpen ? "rotate-180" : ""}`}
-                  />
+          {/* Sort Button */}
+          <button
+            onClick={() => {
+              setShowFilterPanel(true)
+              setActiveFilterTab("sort")
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            <span>{getSortLabel(sortBy)}</span>
+          </button>
+
+          {/* On Sale Quick Filter */}
+          <button
+            onClick={handleOnSaleChange}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full transition-colors ${
+              filters.onSale ? "bg-red-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+            }`}
+          >
+            <Tag className="h-4 w-4" />
+            <span>On Sale</span>
+          </button>
+
+          {/* Active Filters */}
+          {activeFilters.length > 0 && (
+            <button onClick={() => resetFilters("all")} className="text-sm text-gray-600 hover:text-black ml-2">
+              Clear all
+            </button>
+          )}
+        </div>
+
+        {/* Active Filter Tags */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {activeFilters.map((filter, index) => (
+              <div
+                key={`${filter.type}-${filter.key || index}`}
+                className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-sm"
+              >
+                <span>{filter.label}</span>
+                <button onClick={() => removeFilter(filter)} className="ml-1 rounded-full hover:bg-gray-200 p-0.5">
+                  <X className="h-3 w-3" />
                 </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-                {availabilityAccordionOpen && (
-                  <div className="mt-2 pl-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <span>{getSelectedCount("availability")} selected</span>
-                      <button className="text-black underline text-sm" onClick={() => resetFilters("availability")}>
-                        Reset
-                      </button>
-                    </div>
-                    <label className="flex items-center space-x-2 mb-2">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={filters.availability.inStock}
-                        onChange={() => handleAvailabilityChange("inStock")}
-                      />
-                      <span>In stock ({inStockCount})</span>
-                    </label>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4"
-                        checked={filters.availability.outOfStock}
-                        onChange={() => handleAvailabilityChange("outOfStock")}
-                      />
-                      <span>Out of stock ({outOfStockCount})</span>
-                    </label>
-                  </div>
-                )}
+        {/* Filter Panel */}
+        {showFilterPanel && (
+          <div className="filter-panel fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-lg font-medium">Filter & Sort</h3>
+                <button onClick={() => setShowFilterPanel(false)} className="p-1 rounded-full hover:bg-gray-100">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
-              {/* Categories Accordion */}
-              <div className="py-3 px-4">
+              {/* Tabs */}
+              <div className="flex border-b">
                 <button
-                  className="flex justify-between items-center w-full py-2"
-                  onClick={() => setCategoriesAccordionOpen(!categoriesAccordionOpen)}
+                  className={`flex-1 py-3 text-center font-medium ${activeFilterTab === "categories" ? "text-black border-b-2 border-black" : "text-gray-500"}`}
+                  onClick={() => setActiveFilterTab("categories")}
                 >
-                  <span className="text-base font-medium">Categories</span>
-                  <ChevronDown
-                    className={`h-5 w-5 transition-transform duration-200 ${categoriesAccordionOpen ? "rotate-180" : ""}`}
-                  />
+                  Categories
                 </button>
+                <button
+                  className={`flex-1 py-3 text-center font-medium ${activeFilterTab === "availability" ? "text-black border-b-2 border-black" : "text-gray-500"}`}
+                  onClick={() => setActiveFilterTab("availability")}
+                >
+                  Availability
+                </button>
+                <button
+                  className={`flex-1 py-3 text-center font-medium ${activeFilterTab === "sort" ? "text-black border-b-2 border-black" : "text-gray-500"}`}
+                  onClick={() => setActiveFilterTab("sort")}
+                >
+                  Sort
+                </button>
+              </div>
 
-                {categoriesAccordionOpen && (
-                  <div className="mt-2 pl-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <span>{getSelectedCount("categories")} selected</span>
-                      <button className="text-black underline text-sm" onClick={() => resetFilters("categories")}>
-                        Reset
-                      </button>
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto">
-                      {categories.length > 0 ? (
-                        categories.map((category) => {
-                          const count = products.filter((p) => {
-                            if (typeof p.categories[0] === "string") {
-                              return (p.categories as string[]).includes(category._id)
-                            } else {
-                              return (p.categories as Category[]).some((c) => c._id === category._id)
-                            }
-                          }).length
-
-                          return (
-                            <label key={category._id} className="flex items-center space-x-2 mb-2">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={filters.categories[category._id] || false}
-                                onChange={() => handleCategoryChange(category._id)}
-                              />
-                              <span>
-                                {category.name} ({count})
-                              </span>
-                            </label>
-                          )
-                        })
-                      ) : (
-                        <div className="py-2 text-gray-500">No categories available</div>
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {activeFilterTab === "categories" && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="font-medium">Categories</h4>
+                      {getSelectedCount("categories") > 0 && (
+                        <button
+                          className="text-sm text-primary hover:underline"
+                          onClick={() => resetFilters("categories")}
+                        >
+                          Reset
+                        </button>
                       )}
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {categories.map((category) => {
+                        const isSelected = filters.categories[category._id] || false
+                        const count = products.filter((p) => {
+                          if (typeof p.categories[0] === "string") {
+                            return (p.categories as string[]).includes(category._id)
+                          } else {
+                            return (p.categories as Category[]).some((c) => c._id === category._id)
+                          }
+                        }).length
+
+                        return (
+                          <button
+                            key={category._id}
+                            className={`flex items-center justify-between p-3 rounded-lg border ${
+                              isSelected ? "border-black bg-black text-white" : "border-gray-200 hover:border-gray-300"
+                            }`}
+                            onClick={() => handleCategoryChange(category._id)}
+                          >
+                            <span className="text-sm font-medium">{category.name}</span>
+                            <span className={`text-xs ${isSelected ? "text-white" : "text-gray-500"}`}>({count})</span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
-              </div>
 
-              {/* Sort By Section */}
-              <div className="py-3 px-4">
-                <div className="mb-2 text-base font-medium">Sort by:</div>
-                <div className="relative">
-                  <button
-                    className="flex items-center justify-between w-full px-4 py-2 border rounded-lg"
-                    onClick={() => setSortOpen(!sortOpen)}
-                  >
-                    <span>{getSortLabel(sortBy)}</span>
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  </button>
+                {activeFilterTab === "availability" && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="font-medium">Availability</h4>
+                      {getSelectedCount("availability") > 0 && (
+                        <button
+                          className="text-sm text-primary hover:underline"
+                          onClick={() => resetFilters("availability")}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <button
+                        className={`flex items-center justify-between w-full p-3 rounded-lg border ${
+                          filters.availability.inStock
+                            ? "border-black bg-black text-white"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={() => handleAvailabilityChange("inStock")}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Package className="h-5 w-5" />
+                          <span className="font-medium">In Stock</span>
+                        </div>
+                        <span className={filters.availability.inStock ? "text-white" : "text-gray-500"}>
+                          ({inStockCount})
+                        </span>
+                      </button>
 
-                  {sortOpen && (
-                    <div className="absolute left-0 right-0 z-10 mt-1 bg-white border rounded-lg shadow-lg">
+                      <button
+                        className={`flex items-center justify-between w-full p-3 rounded-lg border ${
+                          filters.availability.outOfStock
+                            ? "border-black bg-black text-white"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={() => handleAvailabilityChange("outOfStock")}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Clock className="h-5 w-5" />
+                          <span className="font-medium">Out of Stock</span>
+                        </div>
+                        <span className={filters.availability.outOfStock ? "text-white" : "text-gray-500"}>
+                          ({outOfStockCount})
+                        </span>
+                      </button>
+
+                      <button
+                        className={`flex items-center justify-between w-full p-3 rounded-lg border ${
+                          filters.onSale
+                            ? "border-red-500 bg-red-500 text-white"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={handleOnSaleChange}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Tag className="h-5 w-5" />
+                          <span className="font-medium">On Sale</span>
+                        </div>
+                        <span className={filters.onSale ? "text-white" : "text-gray-500"}>
+                          ({products.filter((p) => p.priceOptions.some((o) => o.salePrice)).length})
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {activeFilterTab === "sort" && (
+                  <div>
+                    <h4 className="font-medium mb-4">Sort By</h4>
+                    <div className="space-y-2">
                       {[
-                        "featured" as SortOption,
-                        "alphabetical-asc" as SortOption,
-                        "alphabetical-desc" as SortOption,
-                        "price-asc" as SortOption,
-                        "price-desc" as SortOption,
-                        "date-asc" as SortOption,
-                        "date-desc" as SortOption,
+                        { value: "featured" as SortOption, label: "Featured" },
+                        { value: "alphabetical-asc" as SortOption, label: "Alphabetically, A-Z" },
+                        { value: "alphabetical-desc" as SortOption, label: "Alphabetically, Z-A" },
+                        { value: "price-asc" as SortOption, label: "Price, low to high" },
+                        { value: "price-desc" as SortOption, label: "Price, high to low" },
+                        { value: "date-asc" as SortOption, label: "Date, old to new" },
+                        { value: "date-desc" as SortOption, label: "Date, new to old" },
                       ].map((option) => (
                         <button
-                          key={option}
-                          className={`block w-full text-left px-4 py-2 hover:bg-blue-500 hover:text-white ${
-                            sortBy === option ? "bg-blue-500 text-white" : ""
+                          key={option.value}
+                          className={`flex items-center justify-between w-full p-3 rounded-lg ${
+                            sortBy === option.value ? "bg-black text-white" : "hover:bg-gray-100"
                           }`}
                           onClick={() => {
-                            setSortBy(option)
-                            setSortOpen(false)
+                            setSortBy(option.value)
                           }}
                         >
-                          {getSortLabel(option)}
+                          <span>{option.label}</span>
+                          {sortBy === option.value && <Check className="h-5 w-5" />}
                         </button>
                       ))}
                     </div>
-                  )}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="py-2 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                    onClick={() => {
+                      resetFilters("all")
+                      setSortBy("featured")
+                    }}
+                  >
+                    Reset All
+                  </button>
+                  <button
+                    className="py-2 px-4 bg-black text-white rounded-lg hover:bg-gray-800"
+                    onClick={() => setShowFilterPanel(false)}
+                  >
+                    View Results ({filteredProducts.length})
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Product count - Desktop only */}
-      <div className="hidden md:block mb-6 text-gray-600">
+      {/* Product count */}
+      <div className="mb-6 text-gray-600">
         {filteredProducts.length} product{filteredProducts.length !== 1 ? "s" : ""}
       </div>
 
       {filteredProducts.length === 0 ? (
-        <div className="text-center py-8">
+        <div className="text-center py-12 bg-gray-50 rounded-xl">
           <h3 className="text-xl font-medium mb-2">No products match your filters</h3>
           <p className="text-gray-600 mb-4">Try adjusting your filters or browse our full collection</p>
           <Button
             variant="outline"
+            className="rounded-lg border-black text-black hover:bg-black hover:text-white"
             onClick={() => {
-              resetFilters("availability")
-              resetFilters("categories")
+              resetFilters("all")
               setSortBy("featured")
-              closeMobileFilter()
+              setShowFilterPanel(false)
             }}
           >
             Clear all filters
@@ -772,54 +752,73 @@ export default function CategoryProducts() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-  {filteredProducts.map((product) => {
-    const sortedPrices = product.priceOptions.sort((a, b) => a.price - b.price);
-    const lowestPriceOption = sortedPrices[0];
-    const displayPrice = lowestPriceOption?.salePrice || lowestPriceOption?.price;
+          {filteredProducts.map((product) => {
+            const sortedPrices = product.priceOptions.sort((a, b) => a.price - b.price)
+            const lowestPriceOption = sortedPrices[0]
+            const displayPrice = lowestPriceOption?.salePrice || lowestPriceOption?.price
+            const isOnSale = product.priceOptions.some(
+              (option) => option.salePrice !== null && option.salePrice !== undefined,
+            )
 
-    return (
-      <div key={product._id} className="border border-gray-200 rounded-lg overflow-hidden group flex flex-col">
-        <Link href={`/product/${product._id}`} className="flex-grow flex flex-col">
-          <div className="aspect-square relative">
-            <Image
-              src={product.images[0]?.url || "/placeholder.svg"}
-              alt={product.name}
-              fill
-              className="object-cover group-hover:scale-105 transition-transform duration-300 ease-in-out"
-            />
-          </div>
+            return (
+              <div key={product._id} className="border border-gray-200 rounded-lg overflow-hidden group flex flex-col">
+                <Link href={`/product/${product._id}`} className="flex-grow flex flex-col">
+                  <div className="aspect-square relative">
+                    <Image
+                      src={product.images[0]?.url || "/placeholder.svg"}
+                      alt={product.name}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300 ease-in-out"
+                    />
+                    {isOnSale && (
+                      <div className="absolute top-0 left-0 bg-red-500 text-white px-3 py-1 text-xs font-bold">
+                        SALE
+                      </div>
+                    )}
+                  </div>
 
-          <div className="p-3 md:p-5 flex flex-col flex-grow">
-            <div className="text-[14px] text-[#1D1D1D]">
-              {product.priceOptions.length > 1 ? "From " : ""}
-              {displayPrice ? `Rs. ${displayPrice.toFixed(2)}` : "Price not available"}
-            </div>
+                  <div className="p-3 md:p-5 flex flex-col flex-grow">
+                    <div className="text-[14px] text-[#1D1D1D]">
+                      {product.priceOptions.length > 1 ? "From " : ""}
+                      {lowestPriceOption?.salePrice ? (
+                        <span>
+                          <span className="line-through text-gray-500 mr-2">
+                            Rs. {lowestPriceOption.price.toFixed(2)}
+                          </span>
+                          <span className="text-red-500">Rs. {lowestPriceOption.salePrice.toFixed(2)}</span>
+                        </span>
+                      ) : displayPrice ? (
+                        `Rs. ${displayPrice.toFixed(2)}`
+                      ) : (
+                        "Price not available"
+                      )}
+                    </div>
 
-            <div className="relative group flex-grow">
-              <h3 className="font-semibold text-[15px] md:text-[17px] lg:text-2xl md:font-bold mt-1 relative after:content-[''] after:block after:w-full after:h-[2px] after:bg-black after:scale-x-0 after:transition-transform after:duration-300 after:origin-left group-hover:after:scale-x-100">
-                {product.name}
-              </h3>
-            </div>
-          </div>
-        </Link>
+                    <div className="relative group flex-grow">
+                      <h3 className="font-semibold text-[15px] md:text-[17px] lg:text-2xl md:font-bold mt-1 relative after:content-[''] after:block after:w-full after:h-[2px] after:bg-black after:scale-x-0 after:transition-transform after:duration-300 after:origin-left group-hover:after:scale-x-100">
+                        {product.name}
+                      </h3>
+                    </div>
+                  </div>
+                </Link>
 
-        {/* Buy Now Button - Fixed at Bottom */}
-        <div className="p-3 md:p-5 pt-0 mt-auto">
-          <Button
-            variant="outline"
-            className="w-full text-sm md:text-base rounded-full border-black hover:bg-black hover:text-white"
-            onClick={(e) => {
-              e.preventDefault();
-              handleBuyNow(product);
-            }}
-          >
-            Buy now
-          </Button>
+                {/* Buy Now Button - Fixed at Bottom */}
+                <div className="p-3 md:p-5 pt-0 mt-auto">
+                  <Button
+                    variant="outline"
+                    className="w-full text-sm md:text-base rounded-full border-black hover:bg-black hover:text-white"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      handleBuyNow(product)
+                    }}
+                  >
+                    Buy now
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
-    );
-  })}
-</div>
       )}
     </div>
   )

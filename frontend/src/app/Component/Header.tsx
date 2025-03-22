@@ -412,7 +412,7 @@ const Header = () => {
       {/* Main header */}
       <div className="bg-white py-4 px-4 lg:py-6 lg:px-8 border-b">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-center sm:justify-between">
             {/* Mobile menu button */}
             <button
               className="lg:hidden text-black"
@@ -425,7 +425,7 @@ const Header = () => {
             {/* Logo */}
             <Link
               href="/"
-              className="ms-4 text-3xl font-bold tracking-tighter me-4"
+              className="sm:m-0 ms-4 text-3xl font-bold tracking-tighter me-4"
             >
               MS Foods
             </Link>
