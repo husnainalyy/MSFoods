@@ -14,14 +14,13 @@ export default function Home() {
         <div className="bg-light"> 
             <Header />
             <HeroSection  />
-            <ProductGrid/>
-            <Message />
-            <Categories/>
             <LifestyleCategories/>
+            <ProductGrid/>
+            <Categories/>
             <Image />
             <ReviewsSection/>
+            <Newsletter />     
             <Contact/>
-            <Newsletter  />     
             <Footer/>
         </div>
     );

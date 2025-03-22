@@ -460,7 +460,7 @@ function ProductCard({ product, viewMode, handleAddToCart }: ProductCardProps) {
                 </div>
             </CardHeader>
             <CardContent className={`flex-1 p-4 ${viewMode === "list" ? "w-2/3" : ""}`}>
-                <Link href={`/user/productDetail/${product._id}`}>
+                <Link href={`/user/product/${product._id}`}>
                     <h3 className="font-medium text-gray-900 mb-1 hover:text-gray-600 transition-colors">{product.name}</h3>
                 </Link>
                 <p className={`text-sm text-gray-500 ${viewMode === "list" ? "" : "line-clamp-2"}`}>{product.description}</p>

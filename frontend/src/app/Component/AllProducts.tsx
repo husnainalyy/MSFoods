@@ -343,13 +343,14 @@ export default function AllProducts() {
     }, 300) // Match this with the CSS transition duration
   }
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse">Loading products...</div>
-      </div>
-    )
-  }
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center min-h-screen">
+                <div className="w-12 h-12 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
 
   if (error) {
     return <div className="text-center text-red-500">{error}</div>
@@ -727,7 +728,7 @@ export default function AllProducts() {
 
     return (
       <div key={product._id} className="border border-gray-200 rounded-lg overflow-hidden group flex flex-col">
-        <Link href={`/product/${product._id}`} className="flex-grow flex flex-col">
+        <Link href={`/user/product/${product._id}`} className="flex-grow flex flex-col">
           <div className="aspect-square relative">
             <Image
               src={product.images[0]?.url || "/placeholder.svg"}

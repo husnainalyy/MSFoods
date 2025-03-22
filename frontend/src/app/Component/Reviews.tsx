@@ -90,16 +90,16 @@ export default function ReviewsSection() {
   return (
     <section className="container mx-auto px-4 py-8">
       {/* Hero Image - Different for mobile and desktop */}
-      <div className="flex justify-between items-center ms-4 mb-6">
+      <div className="flex justify-center items-center ms-4 ">
         <h2 className="text-2xl font-bold">Hear From Our Customers</h2>
       </div>
       
 
       {/* Reviews Carousel */}
-      <div className="w-full bg-[#f2f1ea] py-16 px-4 md:py-24 md:px-8">
+      <div className="w-full  px-4  md:px-8">
         <div className="max-w-4xl mx-auto relative">
           {/* Current Review */}
-          <div className="min-h-[300px] flex flex-col items-center justify-center">
+          <div className="min-h-[250px] flex flex-col items-center justify-center">
             <div
               className={cn("transition-opacity duration-500 text-center", isAnimating ? "opacity-0" : "opacity-100")}
             >
@@ -110,7 +110,7 @@ export default function ReviewsSection() {
           </div>
 
           {/* Navigation Controls */}
-          <div className="flex justify-center items-center mt-8 md:mt-12 gap-2">
+          <div className="flex justify-center items-center  gap-2">
             <button
               onClick={goToPrevSlide}
               className="p-2 text-gray-600 hover:text-gray-900 transition-colors"

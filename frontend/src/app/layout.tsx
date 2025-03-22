@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import Header from "./Component/Header";
 import type React from "react";
 import { UserProvider } from "./Component/user-context";
 import { CartProvider } from "./Component/CartContext";
@@ -27,6 +26,7 @@ export default function RootLayout({
             <body className={dmSans.className}>
                 <UserProvider>
                     <CartProvider>
+                        
                         {children}
                         <Toaster />
                     </CartProvider>

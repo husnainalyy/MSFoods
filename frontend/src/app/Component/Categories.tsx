@@ -16,13 +16,14 @@ interface Category {
 
 // Pastel colors matching the image
 const pastelColors = [
-  "bg-[#FFE8B8] text-[#333333]", // Light Peach/Orange
-  "bg-[#D8E8D5] text-[#333333]", // Light Green
-  "bg-[#FFCCCB] text-[#333333]", // Light Pink
-  "bg-[#E6E6FA] text-[#333333]", // Lavender
-  "bg-[#B0E0E6] text-[#333333]", // Powder Blue
-  "bg-[#F0E68C] text-[#333333]", // Khaki
+    "bg-[#FAD2E1] text-[#333333]", // Soft Blush Pink
+    "bg-[#B5EAD7] text-[#333333]", // Mint Green
+    "bg-[#FFDAC1] text-[#333333]", // Peach
+    "bg-[#C7CEEA] text-[#333333]", // Periwinkle
+    "bg-[#A2D2FF] text-[#333333]", // Baby Blue
+    "bg-[#FFF5BA] text-[#333333]", // Pastel Yellow
 ];
+
 
 export default function Categories() {
   const [categories, setCategories] = useState<Category[]>([]);
