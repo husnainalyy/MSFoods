@@ -1,85 +1,119 @@
+// controllers/orderController.js
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Coupon from '../models/Coupon.js';
+import Settings from '../models/Settings.js';
+import User from '../models/User.js';
+import mongoose from 'mongoose';
 import { handleResponse, handleError } from '../utils/responseHandler.js';
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import transporter from '../config/email.js';
+import { sendWhatsAppOrderUpdate } from '../utils/sendWhatsAppMessage.js';
 
-// Helper: Generate rich error messages
-const validationError = (missingFields) =>
-    `Missing required fields: ${missingFields.join(', ')}`;
-
-// Main Order Controller
 export const orderController = {
-    // Create New Order
+    // Create new order with transaction
     createOrder: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-            const { items, shippingAddress, paymentMethod, couponCode, ...amounts } = req.body;
+            const { items, shippingAddress, paymentMethod, couponCode } = req.body;
             const user = req.user;
+            const isGuest = !user;
 
-            // Validate input
-            const requiredFields = ['email', 'phone', 'name', 'subtotal', 'shippingCost', 'shippingAddress', 'totalAmount'];
+            // Validate required fields
+            const requiredFields = ['fullName', 'address', 'city', 'postalCode', 'country', 'email', 'phone'];
+            const missingFields = requiredFields.filter(field => !shippingAddress[field]);
+            if (missingFields.length) {
+                await session.abortTransaction();
+                return handleError(res, 400, `Missing shipping fields: ${missingFields.join(', ')}`);
+            }
 
+            // Get shipping settings
+            const settings = await Settings.findOne().session(session);
+            const shippingCost = settings?.shippingFee || 0;
 
-            const missingFields = requiredFields.filter(field => !req.body[field]);
-            if (missingFields.length > 0) return handleError(res, 400, validationError(missingFields));
-            if (!items?.length) return handleError(res, 400, 'No order items specified');
+            // Process order items
+            const [orderItems, subtotal] = await processOrderItems(items, session);
 
-            // Process products and validate stock
-            const products = await Product.find({ _id: { $in: items.map(i => i.id) } });
-            const [orderItems, calculatedSubtotal] = await processOrderItems(items, products);
+            // Handle coupon validation
+            let coupon = null;
+            if (couponCode) {
+                if (isGuest) {
+                    await session.abortTransaction();
+                    return handleError(res, 401, 'Authentication required for coupon use');
+                }
+                coupon = await validateCoupon(couponCode, user._id, subtotal, orderItems, session);
+                if (!coupon) {
+                    await session.abortTransaction();
+                    return; // Error already handled
+                }
+            }
 
-            // Validate financials
-            validateOrderAmounts(amounts, calculatedSubtotal, res);
-
-            // Handle coupons
-            const coupon = await handleCoupon(couponCode, user, amounts.subtotal, res);
-            if (couponCode && !coupon) return; // Error already handled
+            // Calculate totals
+            const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
+            const totalAmount = calculateTotal(subtotal, shippingCost, discount);
 
             // Create order document
-            const order = await createOrderDocument({
-                items: orderItems,
-                shippingAddress: buildShippingAddress(req.body, shippingAddress),
-                paymentMethod,
-                amounts,
+            const order = new Order({
                 user: user?._id,
-                coupon
+                items: orderItems,
+                subtotal,
+                shippingCost,
+                discount,
+                totalAmount,
+                shippingAddress,
+                paymentMethod,
+                couponUsed: coupon?._id,
+                status: 'Processing'
             });
 
-            // Handle payment integration
+            // Payment integration
             if (paymentMethod === 'PayFast') {
                 order.paymentResult = generatePayfastPayload(order);
             }
 
-            await order.save();
+            await order.save({ session });
 
-            // Guest user communication
-            if (!user) {
-                sendOrderEmail({
-                    email: order.shippingAddress.email,
-                    subject: 'Order Confirmation',
-                    template: 'orderConfirmation',
-                    order
-                });
+            // Update coupon usage
+            if (coupon) {
+                await updateCouponUsage(coupon, user._id, session);
             }
+
+            await session.commitTransaction();
+
+            // Send notifications
+            await sendOrderNotifications(order, user);
 
             handleResponse(res, 201, 'Order created successfully', order);
 
         } catch (error) {
+            await session.abortTransaction();
             handleError(res, 500, error.message);
+        } finally {
+            session.endSession();
         }
     },
 
-    // Get Order by ID
+    // Get order by ID
     getOrderById: async (req, res) => {
         try {
             const order = await Order.findById(req.params.id)
-                .populate('user', 'name email')
-                .populate('items.product', 'name images');
+                .populate({
+                    path: 'user',
+                    select: 'name email phone'
+                })
+                .populate({
+                    path: 'items.product',
+                    select: 'name images priceOptions'
+                })
+                .populate({
+                    path: 'couponUsed',
+                    select: 'code discountType discountValue'
+                });
 
             if (!order) return handleError(res, 404, 'Order not found');
-            if (!authorizeOrderAccess(order, req.user)) return handleError(res, 403, 'Unauthorized access');
+            if (!authorizeOrderAccess(order, req.user)) return handleError(res, 403, 'Unauthorized');
 
             handleResponse(res, 200, 'Order retrieved', order);
         } catch (error) {
@@ -87,21 +121,20 @@ export const orderController = {
         }
     },
 
-    // Get User Orders
+    // Get user orders
     getUserOrders: async (req, res) => {
         try {
             const orders = await Order.find({ user: req.user._id })
                 .sort('-createdAt')
-                .populate('items.product', 'name images ');
+                .populate('items.product', 'name images');
 
-            
             handleResponse(res, 200, 'Orders retrieved', orders);
         } catch (error) {
             handleError(res, 500, error.message);
         }
     },
 
-    // Get All Orders (Admin)
+    // Get all orders (Admin)
     getAllOrders: async (req, res) => {
         try {
             const { page = 1, limit = 20, status } = req.query;
@@ -126,35 +159,51 @@ export const orderController = {
         }
     },
 
-    // Update Order Status (Admin)
+    // Update order status (Admin)
     updateOrderStatus: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
             const { status, trackingId } = req.body;
-            const validStatuses = ['Processing', 'Shipped', 'Delivered', 'Cancelled','Tracking'];
+            const validStatuses = ['Processing', 'Shipped', 'Delivered', 'Cancelled', 'Returned'];
 
             if (!validStatuses.includes(status)) {
+                await session.abortTransaction();
                 return handleError(res, 400, 'Invalid status value');
             }
 
             const order = await Order.findByIdAndUpdate(
                 req.params.id,
-                { status, ...(trackingId && { trackingId }) },
-                { new: true }
-            );
+                { status, trackingId },
+                { new: true, session }
+            ).populate('user');
 
-            if (!order) return handleError(res, 404, 'Order not found');
+            if (!order) {
+                await session.abortTransaction();
+                return handleError(res, 404, 'Order not found');
+            }
 
-            // Status-specific actions
-            handleStatusChange(order, status, req.user);
+            // Handle stock restoration
+            if (['Cancelled', 'Returned'].includes(status)) {
+                await restoreStock(order.items, session);
+            }
 
-            handleResponse(res, 200, 'Order updated', order);
+            await session.commitTransaction();
+
+            // Send status notifications
+            sendStatusNotifications(order, status);
+
+            handleResponse(res, 200, 'Order status updated', order);
         } catch (error) {
+            await session.abortTransaction();
             handleError(res, 500, error.message);
+        } finally {
+            session.endSession();
         }
     },
-    
 
-    // PayFast Notification Handler
+    // Handle PayFast notification
     handlePayfastNotification: async (req, res) => {
         try {
             const data = req.body;
@@ -177,41 +226,20 @@ export const orderController = {
         }
     },
 
-
+    // Get sales statistics (Admin)
     getSalesStats: async (req, res) => {
         try {
             const { startDate, endDate, period } = req.query;
-          
             let matchStage = {};
+
             if (startDate && endDate) {
-                matchStage = {
-                    createdAt: {
-                        $gte: new Date(startDate),
-                        $lte: new Date(endDate)
-                    }
+                matchStage.createdAt = {
+                    $gte: new Date(startDate),
+                    $lte: new Date(endDate)
                 };
             } else if (period) {
-                const now = new Date();
-                let start;
-                switch (period) {
-                    case 'week':
-                        start = new Date(now.setDate(now.getDate() - 7));
-                        break;
-                    case 'month':
-                        start = new Date(now.setMonth(now.getMonth() - 1));
-                        break;
-                    case 'year':
-                        start = new Date(now.setFullYear(now.getFullYear() - 1));
-                        break;
-                    default:
-                        start = new Date(0); // Default to all time if period is invalid
-                }
-                matchStage = {
-                    createdAt: {
-                        $gte: start,
-                        $lte: new Date()
-                    }
-                };
+                const dateRange = getDateRange(period);
+                matchStage.createdAt = dateRange;
             }
 
             const stats = await Order.aggregate([
@@ -220,110 +248,201 @@ export const orderController = {
                     $group: {
                         _id: null,
                         totalOrders: { $sum: 1 },
+                        totalSales: { $sum: "$subtotal" },
+                        totalShipping: { $sum: "$shippingCost" },
+                        totalDiscount: { $sum: "$discount" },
+                        totalRevenue: { $sum: "$totalAmount" },
                         couponsUsed: {
                             $sum: {
                                 $cond: [{ $ifNull: ["$couponUsed", false] }, 1, 0]
                             }
-                        },
-                        totalSales: { $sum: { $ifNull: ["$subtotal", 0] } },
-                        totalShippingCost: { $sum: { $ifNull: ["$shippingCost", 0] } },
-                        totalRevenue: { $sum: "$totalAmount" }
+                        }
                     }
                 }
             ]);
 
             const result = stats[0] || {
                 totalOrders: 0,
-                couponsUsed: 0,
                 totalSales: 0,
-                totalShippingCost: 0,
-                totalRevenue: 0
+                totalShipping: 0,
+                totalDiscount: 0,
+                totalRevenue: 0,
+                couponsUsed: 0
             };
+
             handleResponse(res, 200, 'Sales stats retrieved', result);
         } catch (error) {
-            handleError(res, 500, 'Server error while fetching sales stats');
+            handleError(res, 500, error.message);
         }
     }
 };
 
 // Helper Functions
-const processOrderItems = async (items, products) => {
-    let calculatedSubtotal = 0;
+const processOrderItems = async (items, session) => {
+    let subtotal = 0;
     const orderItems = [];
+    const stockUpdates = [];
 
     for (const item of items) {
-        const product = products.find(p => p._id.equals(item.id));
-        if (!product) throw new Error(`Product not found: ${item.id}`);
-        if (product.stock < item.quantity) {
+        const product = await Product.findById(item.productId).session(session);
+        if (!product) throw new Error(`Product ${item.productId} not found`);
+
+        const priceOption = product.priceOptions.id(item.priceOptionId);
+        if (!priceOption) throw new Error('Invalid price option');
+
+        // Calculate required stock (1 quantity = 1 packet)
+        const requiredStock = item.quantity;
+
+        if (product.stock < requiredStock) {
             throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock}`);
         }
 
-        product.stock -= item.quantity;
-        await product.save();
+        // Update product stock
+        product.stock -= requiredStock;
+        stockUpdates.push(product.save({ session }));
 
+        // Build order item
         orderItems.push({
             product: product._id,
             name: product.name,
+            priceOption: {
+                type: priceOption.type,
+                weight: priceOption.weight,
+                price: priceOption.salePrice || priceOption.price,
+                salePrice: priceOption.salePrice
+            },
             quantity: item.quantity,
-            price: product.price,
-            image: product.images?.[0]?.url
+            image: product.images[0]?.url
         });
 
-        calculatedSubtotal += product.price * item.quantity;
+        subtotal += (priceOption.salePrice || priceOption.price) * item.quantity;
     }
 
-    return [orderItems, calculatedSubtotal];
+    await Promise.all(stockUpdates);
+    return [orderItems, subtotal];
 };
 
-const validateOrderAmounts = (amounts, calculatedSubtotal, res) => {
-    const calculatedTotal = calculatedSubtotal + amounts.shippingCost - amounts.discount;
-    if (amounts.totalAmount !== calculatedTotal) {
-        handleError(res, 400, 'Invalid total amount calculation');
-        throw new Error('Amount validation failed');
+const validateCoupon = async (code, userId, subtotal, items, session) => {
+    const coupon = await Coupon.findOne({ code: code.toUpperCase() })
+        .session(session)
+        .populate('eligibleUsers eligibleProducts');
+
+    if (!coupon) throw new Error('Invalid coupon code');
+
+    // Validation checks
+    const validations = [
+        coupon.isActive,
+        coupon.startAt <= Date.now(),
+        coupon.expiresAt > Date.now(),
+        coupon.usedCoupons < coupon.totalCoupons,
+        subtotal >= coupon.minPurchase,
+        coupon.maxPurchase ? subtotal <= coupon.maxPurchase : true,
+        !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(userId)),
+        !coupon.eligibleProducts?.length || items.some(item =>
+            coupon.eligibleProducts.some(p => p._id.equals(item.product))
+        )
+    ];
+
+    // Usage limits
+    const userUsage = coupon.usedBy.find(u => u.userId.equals(userId));
+    validations.push((userUsage?.timesUsed || 0) < coupon.maxUsesPerUser);
+
+    if (!validations.every(v => v)) throw new Error('Coupon validation failed');
+    return coupon;
+};
+
+const updateCouponUsage = async (coupon, userId, session) => {
+    coupon.usedCoupons += 1;
+
+    const userUsage = coupon.usedBy.find(u => u.userId.equals(userId));
+    if (userUsage) {
+        userUsage.timesUsed += 1;
+    } else {
+        coupon.usedBy.push({ userId, timesUsed: 1 });
+    }
+
+    await coupon.save({ session });
+};
+
+const calculateTotal = (subtotal, shipping, discount) => {
+    return Math.max(0, (subtotal - discount) + shipping);
+};
+
+const restoreStock = async (items, session) => {
+    const bulkOps = items.map(item => ({
+        updateOne: {
+            filter: { _id: item.product },
+            update: {
+                $inc: {
+                    stock: item.quantity
+                }
+            }
+        }
+    }));
+
+    await Product.bulkWrite(bulkOps, { session });
+};
+
+const sendOrderNotifications = async (order, user) => {
+    const contactInfo = user ? {
+        email: user.email,
+        phone: user.phone,
+        verificationMethod: user.verificationMethod
+    } : order.shippingAddress;
+
+    // Email notification
+    if (contactInfo.email) {
+        await transporter.sendMail({
+            from: process.env.EMAIL_FROM,
+            to: contactInfo.email,
+            subject: 'Order Confirmation',
+            html: generateOrderEmail(order)
+        });
+    }
+
+    // WhatsApp for phone-verified users
+    if (user?.verificationMethod === 'phone' && contactInfo.phone) {
+        await sendWhatsAppOrderUpdate(
+            contactInfo.phone,
+            'order_confirmation',
+            {
+                orderId: order._id.toString(),
+                totalAmount: order.totalAmount,
+                trackingLink: order.trackingId ? `${process.env.TRACKING_BASE_URL}/${order.trackingId}` : 'N/A'
+            }
+        );
     }
 };
 
-const handleCoupon = async (couponCode, user, subtotal) => {
-    if (!couponCode) return null;
-    if (!user) throw new Error('Authentication required for coupon use');
+const sendStatusNotifications = async (order, status) => {
+    const populatedOrder = await Order.findById(order._id).populate('user');
+    const templates = {
+        Shipped: {
+            subject: 'Your Order Has Shipped!',
+            template: 'orderShipped'
+        },
+        Delivered: {
+            subject: 'Order Delivered - Leave a Review',
+            template: 'orderDelivered'
+        },
+        Cancelled: {
+            subject: 'Order Cancellation Notice',
+            template: 'orderCancelled'
+        },
+        Returned: {
+            subject: 'Order Return Processed',
+            template: 'orderReturned'
+        }
+    };
 
-    
-    const coupon = await Coupon.findOne({ code: couponCode.toUpperCase() });
-    if (!coupon ) {
-        throw new Error('Invalid or expired coupon');
+    if (templates[status]) {
+        await sendOrderNotifications(populatedOrder, populatedOrder.user);
     }
-
-    return coupon
 };
 
-const createOrderDocument = ({
-    items,
-    shippingAddress,
-    paymentMethod,
-    amounts,
-    user,
-    coupon
-}) => {
-    return new Order({
-        items,
-        shippingAddress,
-        paymentMethod,
-        subtotal: amounts.subtotal,
-        shippingCost: amounts.shippingCost,
-        discount: amounts.discount,
-        totalAmount: amounts.totalAmount,
-        user: user?._id,
-        couponUsed: coupon?._id,
-        status: 'Processing'
-    });
+const authorizeOrderAccess = (order, user) => {
+    return order.user?.equals(user._id) || user.role === 'admin';
 };
-
-const buildShippingAddress = (body, address) => ({
-    ...address,
-    email: body.email,
-    phone: body.phone,
-    fullName: body.name
-});
 
 const generatePayfastPayload = (order) => {
     const params = {
@@ -354,64 +473,6 @@ const generatePayfastPayload = (order) => {
         redirectUrl: `${process.env.PAYFAST_URL}?${new URLSearchParams(params)}`,
         status: 'pending'
     };
-};
-
-const authorizeOrderAccess = (order, user) => {
-    return order.user?.equals(user._id) || user.role === 'admin';
-};
-
-const handleStatusChange = async (order, newStatus, user) => {
-    if (newStatus === 'Cancelled') {
-        await restoreStock(order.items);
-    }
-
-    if (newStatus === 'Delivered') {
-        order.deliveredAt = new Date();
-    }
-
-    sendStatusEmail(order, newStatus, user);
-};
-
-const restoreStock = async (items) => {
-    const bulkOps = items.map(item => ({
-        updateOne: {
-            filter: { _id: item.product },
-            update: { $inc: { stock: item.quantity } }
-        }
-    }));
-
-    await Product.bulkWrite(bulkOps);
-};
-
-const sendStatusEmail = (order, status, user) => {
-    if (user?.role !== 'admin') return;
-
-    const templates = {
-        Shipped: {
-            subject: 'Your Order Has Shipped!',
-            template: 'orderShipped'
-        },
-        Delivered: {
-            subject: 'Order Delivered - Leave a Review',
-            template: 'orderDelivered'
-        },
-        Cancelled: {
-            subject: 'Order Cancellation Notice',
-            template: 'orderCancelled'
-        },
-        Tracking: {
-            subject: 'Order Tracking Information',
-            template: 'orderTracking'
-        }
-    };
-
-    if (templates[status]) {
-        sendOrderEmail({
-            email: order.shippingAddress.email,
-            ...templates[status],
-            order
-        });
-    }
 };
 
 const verifyPayfastSignature = (data, receivedSignature) => {
@@ -447,113 +508,47 @@ const updateOrderFromPayment = (order, data) => {
     }
 };
 
-// Email System
-const emailTemplates = {
-    orderConfirmation: (order) => `
-    <h1>Thank you for your order!</h1>
-    <p><strong>Order ID:</strong> ${order._id}</p>
-    <h3>Shipping Details:</h3>
-    <p>${Object.values(order.shippingAddress).filter(Boolean).join(', ')}</p>
-    <h3>Items (${order.items.length}):</h3>
-    <ul>
-      ${order.items.map(item => `
-        <li style="margin-bottom: 15px;">
-          ${item.image ? `<img src="${item.image}" style="height: 50px; margin-right: 10px;">` : ''}
-          ${item.name} × ${item.quantity} @ Rs ${item.price}
-        </li>
-      `).join('')}
-    </ul>
-    <h3>Total: Rs ${order.totalAmount}</h3>
-  `,
+const getDateRange = (period) => {
+    const now = new Date();
+    let start;
 
-    orderTracking: (order) => `
-    <h1>🚚 Your Order is on the way!</h1>
-    <p>We are excited to let you know that your order is on its way. Here are the details:</p>
-    <p><strong>Tracking ID:</strong> ${order.trackingId || 'Tracking id will be given soon'}</p>
-    <h3>Shipping Details:</h3>
-    <p>${Object.values(order.shippingAddress).filter(Boolean).join(', ')}</p>
-    <h3>Order Summary:</h3>
-    <ul>
-      ${order.items.map(item => `
-        <li style="margin-bottom: 15px;">
-          ${item.image ? `<img src="${item.image}" style="height: 50px; margin-right: 10px;">` : ''}
-          ${item.name} × ${item.quantity} @ Rs ${item.price}
-        </li>
-      `).join('')}
-    </ul>
-    <h3>Total: Rs ${order.totalAmount}</h3>
-    <p>You can view the full details of your order and track its progress by clicking the link below:</p>
-    <p><a href="${process.env.CLIENT_URL}/orders/${order._id}" style="color: blue;">View Order Details</a></p>
-    <p>Thank you for shopping with us!</p>
-    `,
-    orderShipped: (order) => `
-      <h1>🚚 Your Order Has Shipped!</h1>
-    <p>We are excited to let you know that your order is on its way. Here are the details:</p>
-    <p><strong>Tracking ID:</strong> ${order.trackingId || 'Tracking id will be given soon'}</p>
-    <h3>Shipping Details:</h3>
-    <p>${Object.values(order.shippingAddress).filter(Boolean).join(', ')}</p>
-    <h3>Order Summary:</h3>
-    <ul>
-      ${order.items.map(item => `
-        <li style="margin-bottom: 15px;">
-          ${item.image ? `<img src="${item.image}" style="height: 50px; margin-right: 10px;">` : ''}
-          ${item.name} × ${item.quantity} @ Rs ${item.price}
-        </li>
-      `).join('')}
-    </ul>
-    <h3>Total: Rs ${order.totalAmount}</h3>
-    <p>Thank you for shopping with us!</p>
-  `,
-
-    orderDelivered: (order) => `
-        <h2>🎉 Order Delivered!</h2>
-    <p>We hope you're enjoying your purchase!</p>
-    <h3>Order Summary:</h3>
-    <ul>
-      ${order.items.map(item => `
-        <li style="margin-bottom: 15px;">
-          ${item.image ? `<img src="${item.image}" style="height: 50px; margin-right: 10px;">` : ''}
-          ${item.name} × ${item.quantity} @ Rs ${item.price}
-        </li>
-      `).join('')}
-    </ul>
-    <h3>Total: Rs ${order.totalAmount}</h3>
-    <p>We would love to hear your feedback. Please leave a review.</p>
-    <p>Thank you for shopping with us!</p>
-  `,
-
-    orderCancelled: (order) => `
-  <h1>Your order has been cancelled</h1>
-    <p><strong>Order ID:</strong> ${order._id}</p>
-    <h3>Shipping Details:</h3>
-    <p>${Object.values(order.shippingAddress).filter(Boolean).join(', ')}</p>
-    <h3>Items (${order.items.length}):</h3>
-    <ul>
-      ${order.items.map(item => `
-        <li style="margin-bottom: 15px;">
-          ${item.image ? `<img src="${item.image}" style="height: 50px; margin-right: 10px;">` : ''}
-          ${item.name} × ${item.quantity} @ Rs ${item.price}
-        </li>
-      `).join('')}
-    </ul>
-    <h3>Total: Rs ${order.totalAmount}</h3>
-    <p>If you have any questions, please contact our support team.</p>
-    `
-};
-
-const sendOrderEmail = async ({ email, subject, template, order }) => {
-    try {
-        await transporter.sendMail({
-            from: `<${process.env.EMAIL_USER}>`,
-            to: email,
-            subject,
-            html: emailTemplates[template](order)
-        });
-    } catch (error) {
-        console.error('Email Error:', error);
+    switch (period.toLowerCase()) {
+        case 'week':
+            start = new Date(now.setDate(now.getDate() - 7));
+            break;
+        case 'month':
+            start = new Date(now.setMonth(now.getMonth() - 1));
+            break;
+        case 'year':
+            start = new Date(now.setFullYear(now.getFullYear() - 1));
+            break;
+        default:
+            start = new Date(0);
     }
+
+    return { $gte: start, $lte: new Date() };
 };
 
-
-
-
+const generateOrderEmail = (order) => `
+    <div style="max-width: 600px; margin: 20px auto; padding: 20px;">
+        <h2>Order Confirmation #${order._id}</h2>
+        <p>Thank you for your order! Here are your order details:</p>
+        
+        <h3>Shipping Address</h3>
+        <p>${Object.values(order.shippingAddress).filter(Boolean).join(', ')}</p>
+        
+        <h3>Order Items</h3>
+        <ul>
+            ${order.items.map(item => `
+                <li>
+                    ${item.name} - 
+                    ${item.quantity} packets
+                    @ Rs${item.priceOption.price}
+                </li>
+            `).join('')}
+        </ul>
+        
+        <h3>Total: Rs${order.totalAmount}</h3>
+        <p>Payment Method: ${order.paymentMethod}</p>
+    </div>
+`;

@@ -9,7 +9,7 @@ export const createCoupon = async (req, res) => {
     try {
         const {
             code, discountType, discountValue, minPurchase, maxPurchase,
-            maxUses, singleUse, totalCoupons, startAt, expiresAt, eligibleUsers 
+            maxUses, singleUse, totalCoupons, startAt, expiresAt, eligibleUsers, eligibleProducts
         } = req.body;
 
         if (discountType === 'percentage' && discountValue > 100) {
@@ -35,6 +35,7 @@ export const createCoupon = async (req, res) => {
             isActive: true,
             usedCoupons: 0,
             eligibleUsers: eligibleUsers || [],
+            eligibleProducts: eligibleProducts || [],
             usedBy: []
         });
 
@@ -174,7 +175,7 @@ export const updateCoupon = async (req, res) => {
 
         const allowedUpdates = [
             'discountValue', 'minPurchase', 'maxPurchase', 'maxUses','maxUsesPerUser',
-            'singleUse', 'totalCoupons', 'startAt', 'expiresAt', 'isActive', 'eligibleUsers',
+            'singleUse', 'totalCoupons', 'startAt', 'expiresAt', 'isActive', 'eligibleUsers', 'eligibleProducts'
         ];
 
         Object.keys(updates).forEach(key => {

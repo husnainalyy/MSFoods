@@ -2,11 +2,12 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { useCart } from "@/app/Component/CartContext"
+import { useUser } from "@/app/Component/user-context" // Fixed case sensitivity
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,20 +16,25 @@ import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/components/ui/use-toast"
 import { CreditCard, Truck, ShieldCheck, ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Tag } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import Cookies from "js-cookie"
+
+const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "https://ecommercepeachflask-git-main-husnain-alis-projects-dbd16c4d.vercel.app"
 
 export default function CheckoutPage() {
     const { cart, getTotalItems, getTotalPrice, clearCart } = useCart()
+    const { user } = useUser()
     const router = useRouter()
     const { toast } = useToast()
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [paymentMethod, setPaymentMethod] = useState("cod")
+    const [paymentMethod, setPaymentMethod] = useState<"COD" | "PayFast">("COD")
     const [couponCode, setCouponCode] = useState("")
     const [couponApplied, setCouponApplied] = useState(false)
     const [couponDiscount, setCouponDiscount] = useState(0)
     const [isOrderSummaryOpen, setIsOrderSummaryOpen] = useState(true)
+    const [shippingCost, setShippingCost] = useState(150)
     const [formData, setFormData] = useState({
-        firstName: "",
-        lastName: "",
+        fullName: "",
         email: "",
         phone: "",
         address: "",
@@ -39,19 +45,53 @@ export default function CheckoutPage() {
 
     // Calculate order summary
     const subtotal = getTotalPrice()
-    const shippingCost = subtotal > 0 ? 150 : 0
     const discount = couponApplied ? couponDiscount : 0
     const orderTotal = subtotal + shippingCost - discount
 
+    // Fetch shipping cost from backend
+    const fetchShippingCost = useCallback(async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/settings`, {
+                credentials: "include",
+            })
+            const data = await response.json()
+            if (data.shippingFee) {
+                setShippingCost(data.shippingFee)
+            }
+        } catch (error) {
+            console.error("Failed to fetch shipping cost:", error)
+            toast({
+                title: "Error",
+                description: "Failed to fetch shipping cost. Using default value.",
+                variant: "destructive",
+            })
+        }
+    }, [toast])
+
+    // Fill user data if logged in
+    useEffect(() => {
+        if (user) {
+            setFormData((prevData) => ({
+                ...prevData,
+                fullName: user.name || "",
+                email: user.email || "",
+                phone: user.phone || "",
+            }))
+        }
+    }, [user])
+
+    // Fetch shipping cost on page load
+    useEffect(() => {
+        fetchShippingCost()
+    }, [fetchShippingCost])
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }))
+        setFormData((prev) => ({ ...prev, [name]: value }))
     }
 
-    const handleApplyCoupon = () => {
+    // Update the handleApplyCoupon function to include the authorization header
+    const handleApplyCoupon = async () => {
         if (!couponCode.trim()) {
             toast({
                 title: "Please enter a coupon code",
@@ -60,29 +100,121 @@ export default function CheckoutPage() {
             return
         }
 
-        // Simulate coupon validation
-        if (couponCode.toUpperCase() === "MS10") {
-            const discountAmount = subtotal * 0.1 // 10% discount
-            setCouponDiscount(discountAmount)
-            setCouponApplied(true)
-            toast({
-                title: "Coupon applied!",
-                description: "10% discount has been applied to your order.",
+        try {
+            setIsSubmitting(true)
+
+            // Get the access token
+            const accessToken = localStorage.getItem("accessToken") || Cookies.get("accessToken") || user?.accessToken || ""
+
+            const response = await fetch(`${API_URL}/api/coupons/validate`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    // Add Authorization header with the token
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({ code: couponCode, cartTotal: subtotal }),
+                credentials: "include",
             })
-        } else if (couponCode.toUpperCase() === "WELCOME15") {
-            const discountAmount = subtotal * 0.15 // 15% discount
-            setCouponDiscount(discountAmount)
-            setCouponApplied(true)
+
+            const data = await response.json()
+
+            if (data.success) {
+                setCouponDiscount(data.data.discount)
+                setCouponApplied(true)
+                toast({
+                    title: "Coupon applied!",
+                    description: `You saved Rs.${data.data.discount.toLocaleString()}`,
+                })
+            } else {
+                throw new Error(data.message || "Invalid coupon code")
+            }
+        } catch (error) {
             toast({
-                title: "Coupon applied!",
-                description: "15% discount has been applied to your order.",
-            })
-        } else {
-            toast({
-                title: "Invalid coupon code",
-                description: "Please check your coupon code and try again.",
+                title: "Coupon Error",
+                description: error instanceof Error ? error.message : "Failed to apply coupon",
                 variant: "destructive",
             })
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    // Also update the handleSubmit function to include the authorization header
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setIsSubmitting(true)
+
+        try {
+            // Validate required fields
+            const requiredFields = ["fullName", "email", "phone", "address", "city", "postalCode"]
+            const missingFields = requiredFields.filter((field) => !formData[field as keyof typeof formData])
+
+            if (missingFields.length > 0) {
+                throw new Error(`Missing required fields: ${missingFields.join(", ")}`)
+            }
+
+            // Prepare order items
+            const items = cart.map((item) => ({
+                productId: item.id,
+                priceOptionId: item.priceOptionId,
+                quantity: item.quantity,
+            }))
+
+            // Create order payload
+            const orderData = {
+                items,
+                shippingAddress: {
+                    fullName: formData.fullName,
+                    address: formData.address,
+                    city: formData.city,
+                    postalCode: formData.postalCode,
+                    country: formData.country,
+                    email: formData.email,
+                    phone: formData.phone,
+                },
+                paymentMethod,
+                couponCode: couponApplied ? couponCode : undefined,
+                subtotal,
+                shippingCost,
+                discount,
+                totalAmount: orderTotal,
+            }
+
+            // Get the access token
+            const accessToken = localStorage.getItem("accessToken") || Cookies.get("accessToken") || user?.accessToken || ""
+
+            // Create order
+            const response = await fetch(`${API_URL}/api/orders`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    // Add Authorization header with the token
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify(orderData),
+                credentials: "include",
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) throw new Error(data.message || "Order failed")
+
+            // Handle payment redirect
+            if (paymentMethod === "PayFast" && data.data?.paymentResult?.redirectUrl) {
+                window.location.href = data.data.paymentResult.redirectUrl
+            } else {
+                clearCart()
+                router.push("/checkout/success")
+            }
+        } catch (error) {
+            toast({
+                title: "Order Error",
+                description: error instanceof Error ? error.message : "Failed to place order",
+                variant: "destructive",
+            })
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -92,39 +224,8 @@ export default function CheckoutPage() {
         setCouponDiscount(0)
         toast({
             title: "Coupon removed",
-            description: "The discount has been removed from your order.",
+            description: "The coupon has been removed from your order.",
         })
-    }
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-
-        if (cart.length === 0) {
-            toast({
-                title: "Cart is empty",
-                description: "Please add items to your cart before checking out.",
-                variant: "destructive",
-            })
-            router.push("/user/products")
-            return
-        }
-
-        setIsSubmitting(true)
-
-        // Simulate order processing
-        setTimeout(() => {
-            setIsSubmitting(false)
-            clearCart()
-
-            // Show success toast
-            toast({
-                title: "Order placed successfully!",
-                description: "Thank you for your purchase. You will receive a confirmation email shortly.",
-            })
-
-            // Redirect to success page
-            router.push("/user/checkout/success")
-        }, 2000)
     }
 
     if (cart.length === 0) {
@@ -169,33 +270,24 @@ export default function CheckoutPage() {
                         couponApplied={couponApplied}
                         handleApplyCoupon={handleApplyCoupon}
                         handleRemoveCoupon={handleRemoveCoupon}
+                        isSubmitting={isSubmitting}
                     />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                     {/* Checkout Form */}
                     <div className="lg:col-span-8">
-                        <form onSubmit={handleSubmit}>
+                        <form onSubmit={handleSubmit} id="checkout-form">
                             {/* Contact Information */}
                             <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
                                 <h2 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4">
                                     <div>
-                                        <Label htmlFor="firstName">First Name</Label>
+                                        <Label htmlFor="fullName">Full Name</Label>
                                         <Input
-                                            id="firstName"
-                                            name="firstName"
-                                            value={formData.firstName}
-                                            onChange={handleInputChange}
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="lastName">Last Name</Label>
-                                        <Input
-                                            id="lastName"
-                                            name="lastName"
-                                            value={formData.lastName}
+                                            id="fullName"
+                                            name="fullName"
+                                            value={formData.fullName}
                                             onChange={handleInputChange}
                                             required
                                         />
@@ -259,19 +351,23 @@ export default function CheckoutPage() {
                             {/* Payment Method */}
                             <div className="bg-white p-6 rounded-lg border border-gray-200 mb-6">
                                 <h2 className="text-lg font-medium text-gray-900 mb-4">Payment Method</h2>
-                                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-4">
+                                <RadioGroup
+                                    value={paymentMethod}
+                                    onValueChange={(v) => setPaymentMethod(v as "COD" | "PayFast")}
+                                    className="space-y-4"
+                                >
                                     <div className="flex items-center space-x-3 border border-gray-200 p-4 rounded-md">
-                                        <RadioGroupItem value="cod" id="cod" />
+                                        <RadioGroupItem value="COD" id="cod" />
                                         <Label htmlFor="cod" className="flex items-center cursor-pointer">
                                             <CreditCard className="h-5 w-5 mr-2 text-gray-600" />
                                             Cash on Delivery
                                         </Label>
                                     </div>
-                                    <div className="flex items-center space-x-3 border border-gray-200 p-4 rounded-md opacity-50">
-                                        <RadioGroupItem value="card" id="card" disabled />
-                                        <Label htmlFor="card" className="flex items-center cursor-not-allowed">
+                                    <div className="flex items-center space-x-3 border border-gray-200 p-4 rounded-md">
+                                        <RadioGroupItem value="PayFast" id="payfast" />
+                                        <Label htmlFor="payfast" className="flex items-center cursor-pointer">
                                             <CreditCard className="h-5 w-5 mr-2 text-gray-600" />
-                                            Credit/Debit Card (Coming Soon)
+                                            PayFast (Credit/Debit Card)
                                         </Label>
                                     </div>
                                 </RadioGroup>
@@ -301,6 +397,7 @@ export default function CheckoutPage() {
                                 couponApplied={couponApplied}
                                 handleApplyCoupon={handleApplyCoupon}
                                 handleRemoveCoupon={handleRemoveCoupon}
+                                isSubmitting={isSubmitting}
                             />
 
                             <Button
@@ -308,7 +405,6 @@ export default function CheckoutPage() {
                                 form="checkout-form"
                                 className="w-full mt-6 bg-purple-600 hover:bg-purple-700"
                                 disabled={isSubmitting}
-                                onClick={handleSubmit}
                             >
                                 {isSubmitting ? "Processing..." : "Place Order"}
                             </Button>
@@ -344,6 +440,7 @@ interface OrderSummaryProps {
     couponApplied: boolean
     handleApplyCoupon: () => void
     handleRemoveCoupon: () => void
+    isSubmitting: boolean
 }
 
 function OrderSummaryCollapsible({
@@ -359,6 +456,7 @@ function OrderSummaryCollapsible({
     couponApplied,
     handleApplyCoupon,
     handleRemoveCoupon,
+    isSubmitting,
 }: OrderSummaryProps) {
     return (
         <div className="bg-gray-50 rounded-lg border border-gray-200">
@@ -420,16 +518,21 @@ function OrderSummaryCollapsible({
                                         placeholder="Enter coupon code"
                                         value={couponCode}
                                         onChange={(e) => setCouponCode(e.target.value)}
-                                        disabled={couponApplied}
+                                        disabled={couponApplied || isSubmitting}
                                     />
                                 </div>
                                 {couponApplied ? (
-                                    <Button type="button" variant="outline" onClick={handleRemoveCoupon}>
+                                    <Button type="button" variant="outline" onClick={handleRemoveCoupon} disabled={isSubmitting}>
                                         Remove
                                     </Button>
                                 ) : (
-                                    <Button type="button" onClick={handleApplyCoupon} className="bg-purple-600 hover:bg-purple-700">
-                                        Apply
+                                    <Button
+                                        type="button"
+                                        onClick={handleApplyCoupon}
+                                        className="bg-purple-600 hover:bg-purple-700"
+                                        disabled={isSubmitting}
+                                    >
+                                        {isSubmitting ? "..." : "Apply"}
                                     </Button>
                                 )}
                             </div>

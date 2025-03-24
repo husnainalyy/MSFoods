@@ -13,7 +13,7 @@ import { useState } from "react"
 import { Loader2, Mail, Phone } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {useUser} from "@/app/Component/user-context"
+import { useUser } from "@/app/Component/user-context"
 
 const emailLoginSchema = z.object({
     identifier: z.string().email("Invalid email address"),

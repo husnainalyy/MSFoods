@@ -5,7 +5,7 @@ const orderSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         index: true,
-        required: false, // Make the user field optional
+        required: false
     },
     items: [{
         product: {
@@ -14,28 +14,33 @@ const orderSchema = new mongoose.Schema({
             required: true
         },
         name: String,
+        priceOption: {
+            type: {
+                type: String,
+                enum: ['packet', 'weight-based'],
+                required: true
+            },
+            weight: Number,
+            price: Number,
+            salePrice: Number
+        },
         quantity: {
             type: Number,
             required: true,
             min: [1, 'Quantity cannot be less than 1']
         },
-        price: {
-            type: Number,
-            required: true
-        },
         image: String
     }],
     subtotal: {
         type: Number,
-        required: false
+        required: true
     },
     shippingCost: {
         type: Number,
-        required: false
+        required: true
     },
     discount: {
         type: Number,
-        required: false,
         default: 0
     },
     totalAmount: {
@@ -64,21 +69,26 @@ const orderSchema = new mongoose.Schema({
     },
     couponUsed: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Coupon',
-        required: false
+        ref: 'Coupon'
     },
     status: {
         type: String,
-        enum: ['Processing', 'Shipped', 'Delivered', 'Cancelled'],
+        enum: ['Processing', 'Shipped', 'Delivered', 'Cancelled', 'Returned'],
         default: 'Processing'
     },
     deliveredAt: Date,
-    trackingId: {
-        type: String,
-        required: false
-    }
+    trackingId: String
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+});
+
+orderSchema.virtual('userDetails', {
+    ref: 'User',
+    localField: 'user',
+    foreignField: '_id',
+    justOne: true
 });
 
 export default mongoose.model('Order', orderSchema);

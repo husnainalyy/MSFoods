@@ -45,6 +45,10 @@ const couponSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
+    eligibleProducts: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product'
+    }], 
     usedBy: [{
         userId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -76,9 +80,13 @@ couponSchema.methods.isValidForUser = function (userId) {
 };
 
 couponSchema.methods.applyCoupon = function (subtotal) {
-    const discount = this.discountType === 'percentage'
+    let discount = this.discountType === 'percentage'
         ? (subtotal * this.discountValue) / 100
         : this.discountValue;
+    // Apply max discount if specified
+    if (this.maxDiscount && discount > this.maxDiscount) {
+        discount = this.maxDiscount;
+    }
 
     return Math.min(discount, subtotal);
 };

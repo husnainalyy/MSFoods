@@ -9,6 +9,7 @@ import { useCart } from "@/app/Component/CartContext"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/components/ui/use-toast"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export default function CartPage() {
     const { cart, removeFromCart, updateQuantity, clearCart, getTotalItems, getTotalPrice } = useCart()
@@ -83,85 +84,91 @@ export default function CartPage() {
                     {/* Cart Items */}
                     <div className="lg:col-span-8">
                         <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <ScrollArea className="h-[400px] w-[350px] md:w-full rounded-md border p-4">
                             <div className="divide-y divide-gray-200">
                                 {cart.map((item) => (
+
                                     <div
                                         key={`${item.id}-${item.priceOptionId}`}
                                         className="p-6"
                                     >
-                                        <div className="sm:flex sm:items-center">
-                                            {/* Product Image */}
-                                            <div className="relative h-24 w-24 rounded-md overflow-hidden sm:mr-6 flex-shrink-0">
-                                                <Image
-                                                    src={item.image || "/placeholder.svg?height=96&width=96"}
-                                                    alt={item.name}
-                                                    fill
-                                                    className="object-contain"
-                                                />
-                                            </div>
-
-                                            {/* Product Info */}
-                                            <div className="mt-4 sm:mt-0 flex-1">
-                                                <h3 className="text-base font-medium text-gray-900">
-                                                    <Link href={`/user/product/${item.id}`} className="hover:text-purple-600">
-                                                        {item.name}
-                                                    </Link>
-                                                </h3>
-                                                <div className="mt-1 flex text-sm text-gray-500">
-                                                    {item.weightType === "weight-based" && (
-                                                        <p>{item.weight}g</p>
-                                                    )}
+                                        
+                                            <div className="sm:flex sm:items-center">
+                                                {/* Product Image */}
+                                                <div className="relative h-24 w-24 rounded-md overflow-hidden sm:mr-6 flex-shrink-0">
+                                                    <Image
+                                                        src={item.image || "/placeholder.svg?height=96&width=96"}
+                                                        alt={item.name}
+                                                        fill
+                                                        className="object-contain"
+                                                    />
                                                 </div>
-                                                <p className="mt-1 text-sm font-medium text-gray-900">
-                                                    Rs.{item.price.toLocaleString()}
-                                                </p>
-                                            </div>
-                                        </div>
 
-                                        {/* Quantity Controls and Price - All in one line */}
-                                        <div className="mt-4 flex items-center justify-between">
-                                            <div className="flex items-center border border-gray-300 rounded-md">
-                                                <button
-                                                    type="button"
-                                                    className="p-2 text-gray-600 hover:text-gray-900"
-                                                    onClick={() => handleQuantityChange(item.id, item.priceOptionId, item.quantity - 1)}
-                                                    disabled={item.quantity <= 1}
-                                                >
-                                                    <Minus className="h-4 w-4" />
-                                                </button>
-                                                <span className="w-10 text-center">
-                                                    {isUpdating === `${item.id}-${item.priceOptionId}` ? (
-                                                        <RefreshCw className="h-4 w-4 mx-auto animate-spin" />
-                                                    ) : (
-                                                        item.quantity
-                                                    )}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    className="p-2 text-gray-600 hover:text-gray-900"
-                                                    onClick={() => handleQuantityChange(item.id, item.priceOptionId, item.quantity + 1)}
-                                                    disabled={item.quantity >= item.stock}
-                                                >
-                                                    <Plus className="h-4 w-4" />
-                                                </button>
+                                                {/* Product Info */}
+                                                <div className="mt-4 sm:mt-0 flex-1">
+                                                    <h3 className="text-base font-medium text-gray-900">
+                                                        <Link href={`/user/product/${item.id}`} className="hover:text-purple-600">
+                                                            {item.name}
+                                                        </Link>
+                                                    </h3>
+                                                    <div className="mt-1 flex text-sm text-gray-500">
+                                                        {item.weightType === "weight-based" && (
+                                                            <p>{item.weight}g</p>
+                                                        )}
+                                                    </div>
+                                                    <p className="mt-1 text-sm font-medium text-gray-900">
+                                                        Rs.{item.price.toLocaleString()}
+                                                    </p>
+                                                </div>
                                             </div>
 
-                                            <div className="flex items-center">
-                                                <p className="text-base font-medium text-gray-900 mr-4">
-                                                    Rs.{(item.price * item.quantity).toLocaleString()}
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    className="text-gray-400 hover:text-red-500"
-                                                    onClick={() => handleRemoveItem(item.id, item.priceOptionId, item.name)}
-                                                >
-                                                    <X className="h-5 w-5" />
-                                                </button>
+                                            {/* Quantity Controls and Price - All in one line */}
+                                            <div className="mt-4 flex items-center justify-between">
+                                                <div className="flex items-center border border-gray-300 rounded-md">
+                                                    <button
+                                                        type="button"
+                                                        className="p-2 text-gray-600 hover:text-gray-900"
+                                                        onClick={() => handleQuantityChange(item.id, item.priceOptionId, item.quantity - 1)}
+                                                        disabled={item.quantity <= 1}
+                                                    >
+                                                        <Minus className="h-4 w-4" />
+                                                    </button>
+                                                    <span className="w-10 text-center">
+                                                        {isUpdating === `${item.id}-${item.priceOptionId}` ? (
+                                                            <RefreshCw className="h-4 w-4 mx-auto animate-spin" />
+                                                        ) : (
+                                                            item.quantity
+                                                        )}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="p-2 text-gray-600 hover:text-gray-900"
+                                                        onClick={() => handleQuantityChange(item.id, item.priceOptionId, item.quantity + 1)}
+                                                        disabled={item.quantity >= item.stock}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+
+                                                <div className="flex items-center">
+                                                    <p className="text-base font-medium text-gray-900 mr-4">
+                                                        Rs.{(item.price * item.quantity).toLocaleString()}
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        className="text-gray-400 hover:text-red-500"
+                                                        onClick={() => handleRemoveItem(item.id, item.priceOptionId, item.name)}
+                                                    >
+                                                        <X className="h-5 w-5" />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
+                                        
                                     </div>
+
                                 ))}
-                            </div>
+                        </div>
+                    </ScrollArea>
 
                             {/* Cart Actions */}
                             <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-between">

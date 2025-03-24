@@ -1,44 +1,35 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { useRouter } from "next/navigation"
+import type React from "react"
 
-type User = {
-    id: string
+import { createContext, useContext, useState, useEffect } from "react"
+import Cookies from "js-cookie"
+
+interface User {
+    _id: string
     name: string
-    email?: string
-    phone?: string
+    email: string
+    phone: string
+    avatar?: string
     role: string
-    isVerified: boolean
+    accessToken?: string // Add this field
 }
 
-type AuthTokens = {
-    accessToken: string
-    refreshToken: string
-}
-
-type UserContextType = {
+interface UserContextType {
     user: User | null
-    setUser: (user: User | null) => void
-    isLoading: boolean
-    setIsLoading: (isLoading: boolean) => void
-    login: (user: User, tokens: AuthTokens) => void
+    login: (user: User, tokens?: { accessToken: string; refreshToken: string }) => void
     logout: () => void
-    refreshAccessToken: () => Promise<string | null>
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-
-export function UserProvider({ children }: { children: ReactNode }) {
+export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     const [user, setUser] = useState<User | null>(null)
-    const [isLoading, setIsLoading] = useState<boolean>(true)
-    const router = useRouter()
 
-    // Initialize user from localStorage on mount
     useEffect(() => {
-        const storedUser = localStorage.getItem("user")
+        // Try to get user from localStorage first (for client-side rendering)
+        const storedUser = typeof window !== "undefined" ? localStorage.getItem("user") : null
+
         if (storedUser) {
             try {
                 setUser(JSON.parse(storedUser))
@@ -46,72 +37,52 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 console.error("Failed to parse stored user:", error)
                 localStorage.removeItem("user")
             }
+        } else {
+            // Fallback to cookies
+            const userData = Cookies.get("user")
+            if (userData) {
+                try {
+                    setUser(JSON.parse(userData))
+                } catch (error) {
+                    console.error("Failed to parse user data from cookies:", error)
+                    Cookies.remove("user")
+                }
+            }
         }
-        setIsLoading(false)
     }, [])
 
-    const login = (user: User, tokens: AuthTokens) => {
-        // Store user and tokens in localStorage
-        localStorage.setItem("user", JSON.stringify(user))
-        localStorage.setItem("accessToken", tokens.accessToken)
-        localStorage.setItem("refreshToken", tokens.refreshToken)
+    const login = (user: User, tokens?: { accessToken: string; refreshToken: string }) => {
+        // If tokens are provided, add the accessToken to the user object
+        if (tokens && tokens.accessToken) {
+            user.accessToken = tokens.accessToken
+        }
+
         setUser(user)
+        // Store in both localStorage and cookies for better persistence
+        localStorage.setItem("user", JSON.stringify(user))
+        Cookies.set("user", JSON.stringify(user), { expires: 7 })
+
+        // Store the token separately for API requests
+        if (tokens && tokens.accessToken) {
+            localStorage.setItem("accessToken", tokens.accessToken)
+            Cookies.set("accessToken", tokens.accessToken, { expires: 7 })
+        }
     }
 
     const logout = () => {
-        // Clear user and tokens from localStorage
+        setUser(null)
         localStorage.removeItem("user")
         localStorage.removeItem("accessToken")
-        localStorage.removeItem("refreshToken")
-        setUser(null)
-        router.push("/auth/login")
+        Cookies.remove("user")
+        Cookies.remove("accessToken")
     }
 
-    const refreshAccessToken = async (): Promise<string | null> => {
-        try {
-            const refreshToken = localStorage.getItem("refreshToken")
-            if (!refreshToken) return null
-
-            const response = await fetch(`${API_URL}/api/auth/refresh-token`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refreshToken }),
-            })
-
-            if (!response.ok) throw new Error("Failed to refresh token")
-
-            const data = await response.json()
-            localStorage.setItem("accessToken", data.data.accessToken)
-            localStorage.setItem("refreshToken", data.data.refreshToken)
-
-            return data.data.accessToken
-        } catch (error) {
-            console.error("Token refresh failed:", error)
-            logout() // Force logout if refresh fails
-            return null
-        }
-    }
-
-    return (
-        <UserContext.Provider
-            value={{
-                user,
-                setUser,
-                isLoading,
-                setIsLoading,
-                login,
-                logout,
-                refreshAccessToken,
-            }}
-        >
-            {children}
-        </UserContext.Provider>
-    )
+    return <UserContext.Provider value={{ user, login, logout }}>{children}</UserContext.Provider>
 }
 
-export function useUser() {
+export const useUser = () => {
     const context = useContext(UserContext)
-    if (context === undefined) {
+    if (!context) {
         throw new Error("useUser must be used within a UserProvider")
     }
     return context

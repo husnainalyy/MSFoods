@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useUser } from "@/app/Component/UserContext"
+import { useUser } from "@/app/Component/user-context"
 import { Loader2, ChevronDown, ChevronUp, Package, ShoppingCart } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import ReviewModal from "./ReviewModal"
@@ -138,7 +138,7 @@ export default function MyOrdersPage() {
 
     return (
         <div className="container mx-auto p-4">
-            
+
             {orders && orders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-96">
                     <ShoppingCart className="h-16 w-16 text-gray-400 mb-4" />

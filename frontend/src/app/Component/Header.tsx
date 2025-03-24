@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
     Menu,
     X,
@@ -19,11 +19,26 @@ import {
     Search,
     Loader2,
     Tag,
+    LogOut,
+    Settings,
+    Package,
+    Heart,
 } from "lucide-react"
 import debounce from "lodash.debounce"
 import { useCart } from "./CartContext"
+import { useUser } from "./user-context"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.peachflask.com"
+const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "https://ecommercepeachflask-git-main-husnain-alis-projects-dbd16c4d.vercel.app"
 
 interface Category {
     _id: string
@@ -65,7 +80,9 @@ interface SearchResults {
 }
 
 const Header = () => {
-    const {  getTotalItems, getTotalPrice } = useCart()
+    const router = useRouter()
+    const { cart, getTotalItems, getTotalPrice } = useCart()
+    const { user, logout } = useUser()
     const texts = [
         "Minimum Order Amount Rs 3,000",
         "Free Shipping on Orders Above Rs 5,000",
@@ -265,6 +282,11 @@ const Header = () => {
         setIsMenuOpen(!isMenuOpen)
     }
 
+    const handleLogout = () => {
+        logout()
+        router.push("/")
+    }
+
     const menuVariants = {
         closed: {
             x: "-100%",
@@ -381,12 +403,18 @@ const Header = () => {
         console.log(`Navigating to product: ${productId}`)
         setShowResults(false)
         // Use window.location for direct navigation
-        window.location.href = `/user/product/${productId}`
+        window.location.href = `/product/${productId}`
     }
 
     // Calculate cart total
     const cartTotal = getTotalPrice()
     const cartItemCount = getTotalItems()
+
+    // Get user initials for avatar
+    const getUserInitials = () => {
+        if (!user || !user.name) return "U"
+        return user.name.charAt(0).toUpperCase()
+    }
 
     // Render a product item
     const renderProductItem = (product: Product) => {
@@ -542,13 +570,58 @@ const Header = () => {
 
                         {/* Account and cart buttons */}
                         <div className="hidden lg:flex items-center space-x-4">
-                            <Link
-                                href="/auth/login"
-                                className="flex items-center space-x-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition-colors"
-                            >
-                                <User className="h-5 w-5" />
-                                <span>Account</span>
-                            </Link>
+                            {user ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger className="flex items-center space-x-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition-colors">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarImage src={user.avatar} alt={user.name} />
+                                            <AvatarFallback className="bg-purple-100 text-purple-800">{getUserInitials()}</AvatarFallback>
+                                        </Avatar>
+                                        <span className="hidden md:inline">{user.name}</span>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/user/dashboard" className="flex items-center cursor-pointer">
+                                                <User className="mr-2 h-4 w-4" />
+                                                <span>Dashboard</span>
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/user/orders" className="flex items-center cursor-pointer">
+                                                <Package className="mr-2 h-4 w-4" />
+                                                <span>My Orders</span>
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/user/wishlist" className="flex items-center cursor-pointer">
+                                                <Heart className="mr-2 h-4 w-4" />
+                                                <span>Wishlist</span>
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <Link href="/user/settings" className="flex items-center cursor-pointer">
+                                                <Settings className="mr-2 h-4 w-4" />
+                                                <span>Settings</span>
+                                            </Link>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-red-600">
+                                            <LogOut className="mr-2 h-4 w-4" />
+                                            <span>Logout</span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : (
+                                <Link
+                                    href="/auth/login"
+                                    className="flex items-center space-x-2 px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition-colors"
+                                >
+                                    <User className="h-5 w-5" />
+                                    <span>Login</span>
+                                </Link>
+                            )}
                             <Link
                                 href="/user/cart"
                                 className="flex items-center space-x-2 px-4 py-2 rounded-full bg-black text-white hover:bg-gray-800 transition-colors"
@@ -701,13 +774,51 @@ const Header = () => {
                                     {link.hasChildren && <ChevronRight className="h-5 w-5" />}
                                 </Link>
                             ))}
-                            <Link
-                                href="/auth/login"
-                                className="flex items-center p-4 border-b text-black hover:bg-gray-50 transition-colors"
-                            >
-                                <User className="h-5 w-5 mr-2" />
-                                <span>Account</span>
-                            </Link>
+
+                            {user ? (
+                                <>
+                                    <div className="flex items-center p-4 border-b bg-gray-50">
+                                        <Avatar className="h-10 w-10 mr-3">
+                                            <AvatarImage src={user.avatar} alt={user.name} />
+                                            <AvatarFallback className="bg-purple-100 text-purple-800">{getUserInitials()}</AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <p className="font-medium">{user.name}</p>
+                                            <p className="text-sm text-gray-500">{user.email}</p>
+                                        </div>
+                                    </div>
+                                    <Link
+                                        href="/user/dashboard"
+                                        className="flex items-center p-4 border-b text-black hover:bg-gray-50 transition-colors"
+                                    >
+                                        <User className="h-5 w-5 mr-2" />
+                                        <span>Dashboard</span>
+                                    </Link>
+                                    <Link
+                                        href="/user/orders"
+                                        className="flex items-center p-4 border-b text-black hover:bg-gray-50 transition-colors"
+                                    >
+                                        <Package className="h-5 w-5 mr-2" />
+                                        <span>My Orders</span>
+                                    </Link>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="flex w-full items-center p-4 border-b text-red-600 hover:bg-gray-50 transition-colors"
+                                    >
+                                        <LogOut className="h-5 w-5 mr-2" />
+                                        <span>Logout</span>
+                                    </button>
+                                </>
+                            ) : (
+                                <Link
+                                    href="/auth/login"
+                                    className="flex items-center p-4 border-b text-black hover:bg-gray-50 transition-colors"
+                                >
+                                    <User className="h-5 w-5 mr-2" />
+                                    <span>Login / Register</span>
+                                </Link>
+                            )}
+
                             <Link
                                 href="/cart"
                                 className="flex items-center justify-between p-4 border-b text-black hover:bg-gray-50 transition-colors"

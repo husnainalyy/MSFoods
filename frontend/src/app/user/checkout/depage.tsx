@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/components/ui/use-toast"
 import { useCart } from "@/app/Component/CartContext"
-import { useUser } from "@/app/Component/UserContext"
+import { useUser } from "@/app/Component/user-context"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface CartItem {
@@ -69,7 +69,7 @@ export default function CheckoutPage() {
         }
     }, [user, toast])
 
-   
+
 
     useEffect(() => {
         setTotal(subtotal + shippingCost - discount)
