@@ -160,22 +160,45 @@ export const orderController = {
     },
 
     // Update order status (Admin)
+    // Update order status (Admin)
     updateOrderStatus: async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
             const { status, trackingId } = req.body;
-            const validStatuses = ['Processing', 'Shipped', 'Delivered', 'Cancelled', 'Returned'];
 
-            if (!validStatuses.includes(status)) {
+            // Validate status exists and is a string
+            if (typeof status !== 'string') {
+                await session.abortTransaction();
+                return handleError(res, 400, 'Status is required and must be a string');
+            }
+
+            const validStatuses = ['processing', 'shipped', 'delivered', 'cancelled', 'returned'];
+            const normalizedStatus = status.toLowerCase();
+
+            if (!validStatuses.includes(normalizedStatus)) {
                 await session.abortTransaction();
                 return handleError(res, 400, 'Invalid status value');
             }
 
+            // Validate tracking ID for shipped orders
+            if (normalizedStatus === 'shipped') {
+                if (typeof trackingId !== 'string' || !trackingId.trim()) {
+                    await session.abortTransaction();
+                    return handleError(res, 400, 'Tracking ID is required for shipped orders');
+                }
+            }
+
+            // Format status correctly
+            const formattedStatus = normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+
             const order = await Order.findByIdAndUpdate(
                 req.params.id,
-                { status, trackingId },
+                {
+                    status: formattedStatus,
+                    trackingId: trackingId || undefined
+                },
                 { new: true, session }
             ).populate('user');
 
@@ -185,14 +208,14 @@ export const orderController = {
             }
 
             // Handle stock restoration
-            if (['Cancelled', 'Returned'].includes(status)) {
+            if (['cancelled', 'returned'].includes(normalizedStatus)) {
                 await restoreStock(order.items, session);
             }
 
             await session.commitTransaction();
 
             // Send status notifications
-            sendStatusNotifications(order, status);
+            sendStatusNotifications(order, formattedStatus);
 
             handleResponse(res, 200, 'Order status updated', order);
         } catch (error) {

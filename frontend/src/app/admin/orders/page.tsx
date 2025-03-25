@@ -1,7 +1,9 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Eye, Search, Truck, Download, FileText, Printer } from 'lucide-react'
+import { Eye, Search, Truck, Download, FileText, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -11,23 +13,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { authFetch } from "@/app/utils/auth-helpers"
 import { useReactToPrint } from "react-to-print"
 import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
+import "jspdf-autotable"
 
 interface OrderItem {
     product: string
-    name: string 
+    name: string
     quantity: number
-    price: number
     image?: string
-    priceOption?: {
+    priceOption: {
         type: "packet" | "weight-based"
         weight?: number
         price: number
         salePrice?: number
     }
+    _id: string
+    id: string
 }
 
 interface Order {
@@ -57,7 +61,8 @@ interface Order {
     deliveredAt?: string
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ecommercepeachflask-git-main-husnain-alis-projects-dbd16c4d.vercel.app"
+const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "https://ecommercepeachflask-git-main-husnain-alis-projects-dbd16c4d.vercel.app"
 
 export default function Orders() {
     const { toast } = useToast()
@@ -70,7 +75,7 @@ export default function Orders() {
     const [itemsPerPage, setItemsPerPage] = useState("10")
     const [statusFilter, setStatusFilter] = useState<string>("")
     const [pendingUpdate, setPendingUpdate] = useState<{ orderId: string; status: string; trackingId: string } | null>(
-        null
+        null,
     )
     const [isLoading, setIsLoading] = useState(true)
     const orderDetailsRef = useRef<HTMLDivElement>(null)
@@ -80,7 +85,7 @@ export default function Orders() {
             setIsLoading(true)
             const response = await authFetch(
                 `${API_URL}/api/orders?page=${currentPage}&limit=${itemsPerPage}${searchTerm ? `&search=${searchTerm}` : ""
-                }${statusFilter ? `&status=${statusFilter}` : ""}`
+                }${statusFilter ? `&status=${statusFilter}` : ""}`,
             )
 
             if (!response.ok) {
@@ -130,7 +135,7 @@ export default function Orders() {
             setPendingUpdate({
                 orderId,
                 status: pendingUpdate?.status || order.status,
-                trackingId
+                trackingId,
             })
         }
     }
@@ -147,16 +152,36 @@ export default function Orders() {
         }
     }
 
+    const handlePrint = useReactToPrint({
+        content: () => orderDetailsRef.current,
+        documentTitle: `Order-${currentOrder?._id}`,
+        onBeforePrint: () => {
+            console.log("Print content:", orderDetailsRef.current)
+        },
+        removeAfterPrint: true,
+    })
+
     const submitUpdate = async () => {
         if (!pendingUpdate) return
 
         try {
+            // Format the status to lowercase as required by the API
+            const status = pendingUpdate.status.toLowerCase()
+
+            // Create the request body with the properly formatted status
+            const requestBody = {
+                status: status,
+                trackingId: pendingUpdate.trackingId || "",
+            }
+
+            console.log("Sending update with data:", requestBody)
+
             const response = await authFetch(`${API_URL}/api/orders/${pendingUpdate.orderId}/status`, {
                 method: "PUT",
-                body: JSON.stringify({
-                    status: pendingUpdate.status,
-                    trackingId: pendingUpdate.trackingId
-                }),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(requestBody),
             })
 
             if (!response.ok) {
@@ -193,11 +218,6 @@ export default function Orders() {
         setCurrentPage(1)
     }
 
-    const handlePrint = useReactToPrint({
-        content: () => orderDetailsRef.current,
-        documentTitle: `Order-${currentOrder?._id}`,
-    })
-
     const generatePDF = () => {
         if (!currentOrder) return
 
@@ -227,25 +247,24 @@ export default function Orders() {
 
         // Order items table
         const tableColumn = ["Product", "Quantity", "Price", "Total"]
-        const tableRows = currentOrder.items.map(item => [
+        const tableRows = currentOrder.items.map((item) => [
             item.name,
             item.quantity.toString(),
-            `$${item.price.toFixed(2)}`,
-            `$${(item.quantity * item.price).toFixed(2)}`
+            `$${item.priceOption?.price ? item.priceOption.price.toFixed(2) : "0.00"}`,
+            `$${item.priceOption?.price ? (item.quantity * item.priceOption.price).toFixed(2) : "0.00"}`,
         ])
 
-        // @ts-ignore - jspdf-autotable types
-        doc.autoTable({
+        // Use autoTable directly
+        autoTable(doc, {
             head: [tableColumn],
             body: tableRows,
             startY: 85,
-            theme: 'grid',
+            theme: "grid",
             styles: { fontSize: 10 },
-            headStyles: { fillColor: [66, 66, 66] }
+            headStyles: { fillColor: [66, 66, 66] },
         })
 
         // Get the y position after the table
-        // @ts-ignore - jspdf-autotable types
         const finalY = (doc as any).lastAutoTable.finalY || 120
 
         // Order summary
@@ -293,12 +312,7 @@ export default function Orders() {
 
             <div className="mb-5 flex flex-col md:flex-row gap-4">
                 <div className="flex items-center flex-1 gap-2">
-                    <Input
-                        className="max-w-sm"
-                        placeholder="Search orders..."
-                        value={searchTerm}
-                        onChange={handleSearch}
-                    />
+                    <Input className="max-w-sm" placeholder="Search orders..." value={searchTerm} onChange={handleSearch} />
                     <Button onClick={() => fetchOrders()}>
                         <Search className="h-4 w-4 mr-2" />
                         Search
@@ -390,11 +404,7 @@ export default function Orders() {
                                         <div className="flex items-center space-x-2">
                                             <Input
                                                 placeholder="Tracking ID"
-                                                value={
-                                                    pendingUpdate?.orderId === order._id
-                                                        ? pendingUpdate.trackingId
-                                                        : order.trackingId || ""
-                                                }
+                                                value={pendingUpdate?.orderId === order._id ? pendingUpdate.trackingId : order.trackingId || ""}
                                                 onChange={(e) => handleTrackingIdChange(order._id, e.target.value)}
                                                 className="w-[150px]"
                                             />
@@ -411,7 +421,7 @@ export default function Orders() {
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
                                             </DialogTrigger>
-                                            <DialogContent className="max-w-4xl">
+                                            <DialogContent className="max-w-4xl max-h-[90vh]">
                                                 <DialogHeader>
                                                     <DialogTitle className="flex justify-between items-center">
                                                         <span>Order Details</span>
@@ -427,156 +437,169 @@ export default function Orders() {
                                                         </div>
                                                     </DialogTitle>
                                                 </DialogHeader>
-                                                {currentOrder && (
-                                                    <div ref={orderDetailsRef} className="p-4">
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                                            <Card>
-                                                                <CardHeader>
-                                                                    <CardTitle>Order Information</CardTitle>
-                                                                </CardHeader>
-                                                                <CardContent>
-                                                                    <div className="space-y-2">
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-muted-foreground">Order ID:</span>
-                                                                            <span className="font-medium">{currentOrder._id}</span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-muted-foreground">Customer:</span>
-                                                                            <span className="font-medium">
-                                                                                {currentOrder.user ? currentOrder.user.name : currentOrder.shippingAddress.fullName}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-muted-foreground">Email:</span>
-                                                                            <span className="font-medium">
-                                                                                {currentOrder.user ? currentOrder.user.email : currentOrder.shippingAddress.email}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-muted-foreground">Date:</span>
-                                                                            <span className="font-medium">
-                                                                                {new Date(currentOrder.createdAt).toLocaleString()}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-muted-foreground">Payment Method:</span>
-                                                                            <span className="font-medium">{currentOrder.paymentMethod}</span>
-                                                                        </div>
-                                                                        <div className="flex justify-between">
-                                                                            <span className="text-muted-foreground">Status:</span>
-                                                                            <Badge className={getStatusBadgeColor(currentOrder.status)}>
-                                                                                {currentOrder.status}
-                                                                            </Badge>
-                                                                        </div>
-                                                                        {currentOrder.trackingId && (
+                                                <div className="overflow-auto max-h-[calc(90vh-120px)]">
+                                                    {currentOrder && (
+                                                        <div id="printable-content" ref={orderDetailsRef} className="p-4">
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                                                <Card>
+                                                                    <CardHeader>
+                                                                        <CardTitle>Order Information</CardTitle>
+                                                                    </CardHeader>
+                                                                    <CardContent>
+                                                                        <div className="space-y-2">
                                                                             <div className="flex justify-between">
-                                                                                <span className="text-muted-foreground">Tracking ID:</span>
-                                                                                <span className="font-medium">{currentOrder.trackingId}</span>
+                                                                                <span className="text-muted-foreground">Order ID:</span>
+                                                                                <span className="font-medium">{currentOrder._id}</span>
                                                                             </div>
-                                                                        )}
-                                                                        {currentOrder.deliveredAt && (
                                                                             <div className="flex justify-between">
-                                                                                <span className="text-muted-foreground">Delivered At:</span>
+                                                                                <span className="text-muted-foreground">Customer:</span>
                                                                                 <span className="font-medium">
-                                                                                    {new Date(currentOrder.deliveredAt).toLocaleString()}
+                                                                                    {currentOrder.user
+                                                                                        ? currentOrder.user.name
+                                                                                        : currentOrder.shippingAddress.fullName}
                                                                                 </span>
                                                                             </div>
-                                                                        )}
-                                                                    </div>
+                                                                            <div className="flex justify-between">
+                                                                                <span className="text-muted-foreground">Email:</span>
+                                                                                <span className="font-medium">
+                                                                                    {currentOrder.user
+                                                                                        ? currentOrder.user.email
+                                                                                        : currentOrder.shippingAddress.email}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex justify-between">
+                                                                                <span className="text-muted-foreground">Date:</span>
+                                                                                <span className="font-medium">
+                                                                                    {new Date(currentOrder.createdAt).toLocaleString()}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex justify-between">
+                                                                                <span className="text-muted-foreground">Payment Method:</span>
+                                                                                <span className="font-medium">{currentOrder.paymentMethod}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between">
+                                                                                <span className="text-muted-foreground">Status:</span>
+                                                                                <Badge className={getStatusBadgeColor(currentOrder.status)}>
+                                                                                    {currentOrder.status}
+                                                                                </Badge>
+                                                                            </div>
+                                                                            {currentOrder.trackingId && (
+                                                                                <div className="flex justify-between">
+                                                                                    <span className="text-muted-foreground">Tracking ID:</span>
+                                                                                    <span className="font-medium">{currentOrder.trackingId}</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {currentOrder.deliveredAt && (
+                                                                                <div className="flex justify-between">
+                                                                                    <span className="text-muted-foreground">Delivered At:</span>
+                                                                                    <span className="font-medium">
+                                                                                        {new Date(currentOrder.deliveredAt).toLocaleString()}
+                                                                                    </span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </CardContent>
+                                                                </Card>
+                                                                <Card>
+                                                                    <CardHeader>
+                                                                        <CardTitle>Shipping Address</CardTitle>
+                                                                    </CardHeader>
+                                                                    <CardContent>
+                                                                        <div className="space-y-2">
+                                                                            <p className="font-medium">{currentOrder.shippingAddress.fullName}</p>
+                                                                            <p>{currentOrder.shippingAddress.address}</p>
+                                                                            <p>
+                                                                                {currentOrder.shippingAddress.city}, {currentOrder.shippingAddress.postalCode}
+                                                                            </p>
+                                                                            <p>{currentOrder.shippingAddress.country}</p>
+                                                                            <p>Phone: {currentOrder.shippingAddress.phone}</p>
+                                                                            <p>Email: {currentOrder.shippingAddress.email}</p>
+                                                                        </div>
+                                                                    </CardContent>
+                                                                </Card>
+                                                            </div>
+                                                            <Card className="mb-6">
+                                                                <CardHeader>
+                                                                    <CardTitle>Order Items</CardTitle>
+                                                                </CardHeader>
+                                                                <CardContent>
+                                                                    <Table>
+                                                                        <TableHeader>
+                                                                            <TableRow>
+                                                                                <TableHead>Product</TableHead>
+                                                                                <TableHead>Quantity</TableHead>
+                                                                                <TableHead>Price</TableHead>
+                                                                                <TableHead>Total</TableHead>
+                                                                            </TableRow>
+                                                                        </TableHeader>
+                                                                        <TableBody>
+                                                                            {currentOrder.items.map((item, index) => (
+                                                                                <TableRow key={index}>
+                                                                                    <TableCell>
+                                                                                        <div className="flex items-center gap-3">
+                                                                                            {item.image && (
+                                                                                                <img
+                                                                                                    src={item.image || "/placeholder.svg"}
+                                                                                                    alt={item.name}
+                                                                                                    className="w-10 h-10 object-cover rounded-md"
+                                                                                                />
+                                                                                            )}
+                                                                                            <div>
+                                                                                                <div className="font-medium">{item.name}</div>
+                                                                                                {item.priceOption && (
+                                                                                                    <div className="text-xs text-muted-foreground">
+                                                                                                        {item.priceOption.type === "weight-based" && item.priceOption.weight
+                                                                                                            ? `${item.priceOption.weight}g`
+                                                                                                            : "Packet"}
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>{item.quantity}</TableCell>
+                                                                                    <TableCell>
+                                                                                        ${item.priceOption?.price ? item.priceOption.price.toFixed(2) : "0.00"}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        $
+                                                                                        {item.priceOption?.price
+                                                                                            ? (item.quantity * item.priceOption.price).toFixed(2)
+                                                                                            : "0.00"}
+                                                                                    </TableCell>
+                                                                                </TableRow>
+                                                                            ))}
+                                                                        </TableBody>
+                                                                    </Table>
                                                                 </CardContent>
                                                             </Card>
                                                             <Card>
                                                                 <CardHeader>
-                                                                    <CardTitle>Shipping Address</CardTitle>
+                                                                    <CardTitle>Order Summary</CardTitle>
                                                                 </CardHeader>
                                                                 <CardContent>
                                                                     <div className="space-y-2">
-                                                                        <p className="font-medium">{currentOrder.shippingAddress.fullName}</p>
-                                                                        <p>{currentOrder.shippingAddress.address}</p>
-                                                                        <p>
-                                                                            {currentOrder.shippingAddress.city}, {currentOrder.shippingAddress.postalCode}
-                                                                        </p>
-                                                                        <p>{currentOrder.shippingAddress.country}</p>
-                                                                        <p>Phone: {currentOrder.shippingAddress.phone}</p>
-                                                                        <p>Email: {currentOrder.shippingAddress.email}</p>
+                                                                        <div className="flex justify-between">
+                                                                            <span className="text-muted-foreground">Subtotal:</span>
+                                                                            <span>${currentOrder.subtotal.toFixed(2)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between">
+                                                                            <span className="text-muted-foreground">Shipping:</span>
+                                                                            <span>${currentOrder.shippingCost.toFixed(2)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between">
+                                                                            <span className="text-muted-foreground">Discount:</span>
+                                                                            <span>-${currentOrder.discount.toFixed(2)}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                                                                            <span>Total:</span>
+                                                                            <span>${currentOrder.totalAmount.toFixed(2)}</span>
+                                                                        </div>
                                                                     </div>
                                                                 </CardContent>
                                                             </Card>
                                                         </div>
-                                                        <Card className="mb-6">
-                                                            <CardHeader>
-                                                                <CardTitle>Order Items</CardTitle>
-                                                            </CardHeader>
-                                                            <CardContent>
-                                                                <Table>
-                                                                    <TableHeader>
-                                                                        <TableRow>
-                                                                            <TableHead>Product</TableHead>
-                                                                            <TableHead>Quantity</TableHead>
-                                                                            <TableHead>Price</TableHead>
-                                                                            <TableHead>Total</TableHead>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    <TableBody>
-                                                                        {currentOrder.items.map((item, index) => (
-                                                                            <TableRow key={index}>
-                                                                                <TableCell>
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        {item.image && (
-                                                                                            <img
-                                                                                                src={item.image || "/placeholder.svg"}
-                                                                                                alt={item.name}
-                                                                                                className="w-10 h-10 object-cover rounded-md"
-                                                                                            />
-                                                                                        )}
-                                                                                        <div>
-                                                                                            <div className="font-medium">{item.name}</div>
-                                                                                            {item.priceOption && (
-                                                                                                <div className="text-xs text-muted-foreground">
-                                                                                                    {item.priceOption.type === "weight-based" && item.priceOption.weight
-                                                                                                        ? `${item.priceOption.weight}g`
-                                                                                                        : "Packet"}
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </TableCell>
-                                                                                <TableCell>{item.quantity}</TableCell>
-                                                                                <TableCell>${item.price}</TableCell>
-                                                                                <TableCell>${(item.quantity * item.price).toFixed(2)}</TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            </CardContent>
-                                                        </Card>
-                                                        <Card>
-                                                            <CardHeader>
-                                                                <CardTitle>Order Summary</CardTitle>
-                                                            </CardHeader>
-                                                            <CardContent>
-                                                                <div className="space-y-2">
-                                                                    <div className="flex justify-between">
-                                                                        <span className="text-muted-foreground">Subtotal:</span>
-                                                                        <span>${currentOrder.subtotal.toFixed(2)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between">
-                                                                        <span className="text-muted-foreground">Shipping:</span>
-                                                                        <span>${currentOrder.shippingCost.toFixed(2)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between">
-                                                                        <span className="text-muted-foreground">Discount:</span>
-                                                                        <span>-${currentOrder.discount.toFixed(2)}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                                                                        <span>Total:</span>
-                                                                        <span>${currentOrder.totalAmount.toFixed(2)}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </CardContent>
-                                                        </Card>
-                                                    </div>
-                                                )}
+                                                    )}
+                                                </div>
                                             </DialogContent>
                                         </Dialog>
                                     </TableCell>
@@ -589,7 +612,7 @@ export default function Orders() {
 
             <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="text-sm text-muted-foreground">
-                    Showing {orders.length} of {totalPages * parseInt(itemsPerPage)} orders
+                    Showing {orders.length} of {totalPages * Number.parseInt(itemsPerPage)} orders
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
@@ -633,3 +656,4 @@ export default function Orders() {
         </div>
     )
 }
+
