@@ -215,7 +215,7 @@ export const orderController = {
             await session.commitTransaction();
 
             // Send status notifications
-            sendStatusNotifications(order, formattedStatus);
+            await sendStatusNotifications(order, formattedStatus);
 
             handleResponse(res, 200, 'Order status updated', order);
         } catch (error) {
@@ -438,28 +438,59 @@ const sendOrderNotifications = async (order, user) => {
 };
 
 const sendStatusNotifications = async (order, status) => {
-    const populatedOrder = await Order.findById(order._id).populate('user');
-    const templates = {
-        Shipped: {
-            subject: 'Your Order Has Shipped!',
-            template: 'orderShipped'
-        },
-        Delivered: {
-            subject: 'Order Delivered - Leave a Review',
-            template: 'orderDelivered'
-        },
-        Cancelled: {
-            subject: 'Order Cancellation Notice',
-            template: 'orderCancelled'
-        },
-        Returned: {
-            subject: 'Order Return Processed',
-            template: 'orderReturned'
-        }
-    };
+    try {
+        const populatedOrder = await Order.findById(order._id).populate('user');
+        const templates = {
+            Shipped: {
+                subject: 'Your Order Has Shipped!',
+                template: generateStatusEmail(populatedOrder, 'Shipped')
+            },
+            Delivered: {
+                subject: 'Order Delivered - Leave a Review',
+                template: generateStatusEmail(populatedOrder, 'Delivered')
+            },
+            Cancelled: {
+                subject: 'Order Cancellation Notice',
+                template: generateStatusEmail(populatedOrder, 'Cancelled')
+            },
+            Returned: {
+                subject: 'Order Return Processed',
+                template: generateStatusEmail(populatedOrder, 'Returned')
+            }
+        };
 
-    if (templates[status]) {
-        await sendOrderNotifications(populatedOrder, populatedOrder.user);
+        if (templates[status]) {
+            const contactInfo = populatedOrder.user ? {
+                email: populatedOrder.user.email,
+                phone: populatedOrder.user.phone
+            } : populatedOrder.shippingAddress;
+
+            // Send email notification
+            if (contactInfo.email) {
+                await transporter.sendMail({
+                    from: process.env.EMAIL_FROM,
+                    to: contactInfo.email,
+                    subject: templates[status].subject,
+                    html: templates[status].template
+                });
+            }
+
+            // Send WhatsApp notification
+            if (contactInfo.phone && populatedOrder.user?.verificationMethod === 'phone') {
+                await sendWhatsAppOrderUpdate(
+                    contactInfo.phone,
+                    'status_update',
+                    {
+                        orderId: populatedOrder._id.toString(),
+                        status: populatedOrder.status,
+                        trackingLink: populatedOrder.trackingId ?
+                            `${process.env.TRACKING_BASE_URL}/${populatedOrder.trackingId}` : 'N/A'
+                    }
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error sending status notifications:', error);
     }
 };
 
@@ -557,6 +588,13 @@ const generateOrderEmail = (order) => `
         <h2>Order Confirmation #${order._id}</h2>
         <p>Thank you for your order! Here are your order details:</p>
         
+ <h3>Order Status: ${order.status}</h3>
+    
+    ${order.trackingId ? `
+      <h3>Tracking Information</h3>
+      <p>Tracking ID: ${order.trackingId}</p>
+    ` : ''}
+    
         <h3>Shipping Address</h3>
         <p>${Object.values(order.shippingAddress).filter(Boolean).join(', ')}</p>
         
@@ -575,3 +613,213 @@ const generateOrderEmail = (order) => `
         <p>Payment Method: ${order.paymentMethod}</p>
     </div>
 `;
+
+const generateStatusEmail = (order, status) => {
+    const statusInfo = {
+        Processing: {
+            title: "Order Processing",
+            message: "We've received your order and are preparing it for shipment.",
+            color: "#3498db"
+        },
+        Shipped: {
+            title: "Order Shipped!",
+            message: "Your order is on its way to you!",
+            color: "#2ecc71"
+        },
+        Delivered: {
+            title: "Order Delivered",
+            message: "Your order has been successfully delivered.",
+            color: "#27ae60"
+        },
+        Cancelled: {
+            title: "Order Cancelled",
+            message: "Your order has been cancelled as requested.",
+            color: "#e74c3c"
+        },
+        Returned: {
+            title: "Return Processed",
+            message: "We've received your returned items.",
+            color: "#f39c12"
+        }
+    };
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Update</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: ${statusInfo[status].color};
+            padding: 30px 20px;
+            text-align: center;
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .container {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .content {
+            padding: 30px;
+            background-color: #ffffff;
+        }
+        .order-info {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+        }
+        .order-info p {
+            margin: 8px 0;
+        }
+        .tracking-info {
+            background-color: #f0f7ff;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 25px 0;
+            border-left: 4px solid ${statusInfo[status].color};
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: ${statusInfo[status].color};
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            margin-top: 15px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #777;
+            font-size: 12px;
+            border-top: 1px solid #eee;
+        }
+        .item-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .item-table th {
+            text-align: left;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+        }
+        .item-table td {
+            padding: 15px 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .item-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>${statusInfo[status].title}</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear ${order.shippingAddress.fullName},</p>
+            <p>${statusInfo[status].message}</p>
+            
+            <div class="order-info">
+                <p><strong>Order Number:</strong> #${order._id}</p>
+                <p><strong>Order Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
+                <p><strong>Status:</strong> <span style="color: ${statusInfo[status].color}; font-weight: 600">${status}</span></p>
+            </div>
+            
+            ${status === 'Shipped' && order.trackingId ? `
+            <div class="tracking-info">
+                <h3 style="margin-top: 0">Tracking Information</h3>
+                <p><strong>Tracking Number:</strong> ${order.trackingId}</p>
+                ${process.env.TRACKING_BASE_URL ? `
+                <a href="${process.env.TRACKING_BASE_URL}/${order.trackingId}" class="button">Track Your Package</a>
+                ` : ''}
+            </div>
+            ` : ''}
+            
+            <h3 style="margin-bottom: 15px">Order Summary</h3>
+            <table class="item-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Quantity</th>
+                        <th>Price</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${order.items.map(item => `
+                    <tr>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 10px; padding-right:10px;">
+                                ${item.image ? `<img src="${item.image}" class="item-image" alt="${item.name}">` : ''}
+                                <div style="padding-left:10px;">
+                                    <div style="font-weight: 600">${item.name}</div>
+                                    <div style="font-size: 12px; color: #777">
+                                        ${item.priceOption.type === 'weight-based' ?
+            `${item.priceOption.weight}g` : 'Packet'}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${item.quantity}</td>
+                        <td>Rs${(item.priceOption.salePrice || item.priceOption.price).toFixed(2)}</td>
+                        <td>Rs${(item.quantity * (item.priceOption.salePrice || item.priceOption.price)).toFixed(2)}</td>
+                    </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div style="text-align: right; margin-top: 20px">
+                <p><strong>Subtotal:</strong> Rs${order.subtotal.toFixed(2)}</p>
+                <p><strong>Shipping:</strong> Rs${order.shippingCost.toFixed(2)}</p>
+                ${order.discount > 0 ? `<p><strong>Discount:</strong> -Rs${order.discount.toFixed(2)}</p>` : ''}
+                <p style="font-size: 18px; font-weight: 600; margin-top: 10px">
+                    <strong>Total:</strong> Rs${order.totalAmount.toFixed(2)}
+                </p>
+            </div>
+            
+            <div style="margin-top: 30px">
+                <h3>Shipping Address</h3>
+                <p>${order.shippingAddress.fullName}</p>
+                <p>${order.shippingAddress.address}</p>
+                <p>${order.shippingAddress.city}, ${order.shippingAddress.postalCode}</p>
+                <p>${order.shippingAddress.country}</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>If you have any questions, please contact our support team at support@yourstore.com</p>
+            <p>© ${new Date().getFullYear()} Your Store Name. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+  `;
+};
