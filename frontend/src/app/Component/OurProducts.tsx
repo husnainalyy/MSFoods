@@ -130,16 +130,14 @@ export default function ProductGrid() {
 
                             {/* Buy Now Button - Fixed at Bottom */}
                             <div className="p-5 pt-0 mt-auto">
+                            <Link href={`/user/product/${product._id}`}>
                                 <Button
                                     variant="outline"
                                     className="w-full rounded-full border-black hover:bg-black hover:text-white"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        handleBuyNow(product);
-                                    }}
                                 >
                                     Buy now
                                 </Button>
+                            </Link>
                             </div>
                         </div>
                     );
