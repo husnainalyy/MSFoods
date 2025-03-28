@@ -22,7 +22,6 @@ import {
     LogOut,
     Settings,
     Package,
-    Heart,
 } from "lucide-react"
 import debounce from "lodash.debounce"
 import { useCart } from "./CartContext"
@@ -589,21 +588,21 @@ const Header = () => {
                                             </Link>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem asChild>
-                                            <Link href="/user/orders" className="flex items-center cursor-pointer">
+                                            <Link href="/user/dashboard/orders" className="flex items-center cursor-pointer">
                                                 <Package className="mr-2 h-4 w-4" />
                                                 <span>My Orders</span>
                                             </Link>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem asChild>
-                                            <Link href="/user/wishlist" className="flex items-center cursor-pointer">
-                                                <Heart className="mr-2 h-4 w-4" />
-                                                <span>Wishlist</span>
+                                            <Link href="/user/dashboard/order-history" className="flex items-center cursor-pointer">
+                                                <Clock className="mr-2 h-4 w-4" />
+                                                <span>Order History</span>
                                             </Link>
                                         </DropdownMenuItem>
                                         <DropdownMenuItem asChild>
-                                            <Link href="/user/settings" className="flex items-center cursor-pointer">
+                                            <Link href="/user/dashboard/edit-profile" className="flex items-center cursor-pointer">
                                                 <Settings className="mr-2 h-4 w-4" />
-                                                <span>Settings</span>
+                                                <span>Edit Profile</span>
                                             </Link>
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />

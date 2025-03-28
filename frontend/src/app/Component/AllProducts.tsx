@@ -322,12 +322,6 @@ export default function AllProducts() {
     return getSelectedCount("availability") + getSelectedCount("categories") + (filters.onSale ? 1 : 0)
   }
 
-  const handleBuyNow = (product: Product) => {
-    toast({
-      title: "Added to cart",
-      description: `${product.name} added to your cart`,
-    })
-  }
 
   const getSortLabel = (sort: SortOption) => {
     switch (sort) {
@@ -752,16 +746,14 @@ export default function AllProducts() {
 
                 {/* Buy Now Button - Fixed at Bottom */}
                 <div className="p-3 md:p-5 pt-0 mt-auto">
+                <Link href={`/user/product/${product._id}`}>
                   <Button
                     variant="outline"
                     className="w-full text-sm md:text-base rounded-full border-black hover:bg-black hover:text-white"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      handleBuyNow(product)
-                    }}
                   >
                     Buy now
                   </Button>
+                </Link>
                 </div>
               </div>
             )

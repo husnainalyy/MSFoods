@@ -10,15 +10,48 @@ import {
 // @access  Private
 export const getUserProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id)
-            .select('-password -verificationToken -refreshToken')
-            .populate('addresses');
+        const user = await User.aggregate([
+            {
+                $match: { _id: req.user._id }  // Match the user by their ID
+            },
+            {
+                $lookup: {
+                    from: 'orders', // The name of the collection for orders
+                    localField: '_id',
+                    foreignField: 'user',
+                    as: 'orders' // This will add an 'orders' field to the user document
+                }
+            },
+            {
+                $addFields: {
+                    orderCount: { $size: '$orders' },  // Count the number of orders
+                    totalSpent: { $sum: '$orders.totalAmount' }  // Sum the totalAmount from the orders
+                }
+            },
+            {
+                $project: {
+                    password: 0, // Exclude the password field
+                    verificationToken: 0, // Exclude the verificationToken field
+                    refreshToken: 0, // Exclude the refreshToken field
+                    orders: 0  // Optionally, exclude the orders field from the response if not needed
+                }
+            }
+        ]);
 
-        if (!user) {
+        // If no user is found
+        if (!user || user.length === 0) {
             return handleError(res, 404, 'User not found');
         }
 
-        handleResponse(res, 200, 'User profile retrieved', user);
+        // Since aggregate returns an array, we can access the first result
+        const userProfile = user[0];
+
+        // Add addresses if needed (assuming addresses are referenced in the User model)
+        await User.populate(userProfile, {
+            path: 'addresses' // Populate addresses if needed
+        });
+
+        handleResponse(res, 200, 'User profile retrieved', userProfile);
 
     } catch (error) {
         handleError(res, 500, error.message);
@@ -30,7 +63,7 @@ export const getUserProfile = async (req, res) => {
 // @access  Private
 export const updateProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id);
+        const user = await User.findById(req.user._id).select('+password'); // Need to include password for comparison
         const { name, email, phone, currentPassword, newPassword } = req.body;
 
         if (!user) {
@@ -56,10 +89,14 @@ export const updateProfile = async (req, res) => {
             if (!currentPassword) {
                 return handleError(res, 400, 'Current password is required');
             }
+            
+            // Check if the current password is correct
             const isMatch = await user.comparePassword(currentPassword);
             if (!isMatch) {
                 return handleError(res, 401, 'Current password is incorrect');
             }
+            
+            // Set the new password
             user.password = newPassword;
         }
 
@@ -72,10 +109,21 @@ export const updateProfile = async (req, res) => {
                 accessToken: generateAccessToken(updatedUser._id),
                 refreshToken: generateRefreshToken(updatedUser._id)
             };
+            
+            // Update refresh token in database
+            updatedUser.refreshToken = tokens.refreshToken;
+            await updatedUser.save();
         }
 
         handleResponse(res, 200, 'Profile updated successfully', {
-            user: updatedUser,
+            user: {
+                _id: updatedUser._id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                phone: updatedUser.phone,
+                role: updatedUser.role,
+                isVerified: updatedUser.isVerified
+            },
             ...tokens
         });
 
