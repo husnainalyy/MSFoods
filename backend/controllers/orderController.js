@@ -20,6 +20,7 @@ export const orderController = {
             const { items, shippingAddress, paymentMethod, couponCode } = req.body;
             const user = req.user;
             const isGuest = !user;
+            console.log("yser is ", req.user);
 
             // Validate required fields
             const requiredFields = ['fullName', 'address', 'city', 'postalCode', 'country', 'email', 'phone'];
@@ -38,17 +39,31 @@ export const orderController = {
 
             // Handle coupon validation
             let coupon = null;
+            // In createOrder method
             if (couponCode) {
                 if (isGuest) {
                     await session.abortTransaction();
                     return handleError(res, 401, 'Authentication required for coupon use');
                 }
-                coupon = await validateCoupon(couponCode, user._id, subtotal, orderItems, session);
-                if (!coupon) {
+                try {
+                    coupon = await validateCoupon(couponCode, user._id, subtotal, orderItems, session);
+                } catch (error) {
                     await session.abortTransaction();
-                    return; // Error already handled
+                    return handleError(res, 400, error.message); // Return specific error message
                 }
             }
+            console.log('Coupon validation checks:', {
+                isActive: coupon.isActive,
+                dateValid: coupon.startAt <= Date.now() && coupon.expiresAt > Date.now(),
+                usageLimit: coupon.usedCoupons < coupon.totalCoupons,
+                minPurchase: subtotal >= coupon.minPurchase,
+                maxPurchase: !coupon.maxPurchase || subtotal <= coupon.maxPurchase,
+                eligibleUser: !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(userId)),
+                eligibleProducts: !coupon.eligibleProducts?.length || orderItems.some(item =>
+                    coupon.eligibleProducts.some(p => p._id.equals(item.product))
+                ),
+                
+            });
 
             // Calculate totals
             const discount = coupon ? coupon.applyCoupon(subtotal) : 0;
@@ -345,35 +360,91 @@ const processOrderItems = async (items, session) => {
     return [orderItems, subtotal];
 };
 
-const validateCoupon = async (code, userId, subtotal, items, session) => {
+const validateCoupon = async (code, userId, subtotal, orderItems, session) => {
     const coupon = await Coupon.findOne({ code: code.toUpperCase() })
         .session(session)
         .populate('eligibleUsers eligibleProducts');
 
-    if (!coupon) throw new Error('Invalid coupon code');
+    if (!coupon) {
+        throw new Error('Coupon code not found');
+    }
 
-    // Validation checks
+    // Check user usage first since we need it for multiple validations
+    const userUsage = coupon.usedBy.find(u => u.userId.equals(userId));
+    const timesUsed = userUsage?.timesUsed || 0;
+
+    // Validation checks with specific error messages
     const validations = [
-        coupon.isActive,
-        coupon.startAt <= Date.now(),
-        coupon.expiresAt > Date.now(),
-        coupon.usedCoupons < coupon.totalCoupons,
-        subtotal >= coupon.minPurchase,
-        coupon.maxPurchase ? subtotal <= coupon.maxPurchase : true,
-        !coupon.eligibleUsers?.length || coupon.eligibleUsers.some(u => u._id.equals(userId)),
-        !coupon.eligibleProducts?.length || items.some(item =>
-            coupon.eligibleProducts.some(p => p._id.equals(item.product))
-        )
+        {
+            check: coupon.isActive,
+            message: 'Coupon is not active'
+        },
+        {
+            check: coupon.startAt <= Date.now(),
+            message: 'Coupon has not started yet'
+        },
+        {
+            check: coupon.expiresAt > Date.now(),
+            message: 'Coupon has expired'
+        },
+        {
+            check: coupon.usedCoupons < coupon.totalCoupons,
+            message: 'Coupon usage limit reached'
+        },
+        {
+            check: subtotal >= coupon.minPurchase,
+            message: `Order subtotal must be at least Rs${coupon.minPurchase}`
+        },
+        {
+            check: !coupon.maxPurchase || subtotal <= coupon.maxPurchase,
+            message: coupon.maxPurchase ?
+                `Order subtotal must be less than Rs${coupon.maxPurchase}` :
+                'Coupon not valid for this order amount'
+        },
+        {
+            check: !coupon.eligibleUsers?.length ||
+                coupon.eligibleUsers.some(u => u._id.equals(userId)),
+            message: 'Coupon not valid for this user'
+        },
+        {
+            check: !coupon.eligibleProducts?.length ||
+                orderItems.some(item =>
+                    coupon.eligibleProducts.some(p => p._id.equals(item.product))
+                ),
+            message: 'Coupon not valid for these products'
+        },
+        {
+            check: timesUsed < coupon.maxUsesPerUser,
+            message: `Maximum uses per user reached (${coupon.maxUsesPerUser})`
+        }
     ];
 
-    // Usage limits
-    const userUsage = coupon.usedBy.find(u => u.userId.equals(userId));
-    validations.push((userUsage?.timesUsed || 0) < coupon.maxUsesPerUser);
+    // Debug logging - now with all variables defined
+    console.log('Coupon validation debug:', {
+        couponCode: coupon.code,
+        isActive: coupon.isActive,
+        validDates: coupon.startAt <= Date.now() && coupon.expiresAt > Date.now(),
+        totalUses: `${coupon.usedCoupons}/${coupon.totalCoupons}`,
+        userUses: `${timesUsed}/${coupon.maxUsesPerUser}`,
+        minPurchase: `${subtotal >= coupon.minPurchase} (${subtotal} >= ${coupon.minPurchase})`,
+        maxPurchase: coupon.maxPurchase ?
+            `${subtotal <= coupon.maxPurchase} (${subtotal} <= ${coupon.maxPurchase})` : 'No max',
+        eligibleUser: !coupon.eligibleUsers?.length ||
+            coupon.eligibleUsers.some(u => u._id.equals(userId)),
+        eligibleProducts: !coupon.eligibleProducts?.length ||
+            orderItems.some(item =>
+                coupon.eligibleProducts.some(p => p._id.equals(item.product))
+            )
+    });
 
-    if (!validations.every(v => v)) throw new Error('Coupon validation failed');
+    // Find the first failed validation
+    const failedValidation = validations.find(v => !v.check);
+    if (failedValidation) {
+        throw new Error(failedValidation.message);
+    }
+
     return coupon;
 };
-
 const updateCouponUsage = async (coupon, userId, session) => {
     coupon.usedCoupons += 1;
 

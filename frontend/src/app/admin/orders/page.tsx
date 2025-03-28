@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Eye, Search, Truck, Download, FileText, Printer } from "lucide-react"
+import { Eye, Search, Truck, Download, FileText, Printer, Package, Scale } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -218,6 +218,19 @@ export default function Orders() {
         setCurrentPage(1)
     }
 
+    // Format product name with type and weight information
+    const formatProductName = (item: OrderItem) => {
+        const productType = item.priceOption.type
+        const weight = item.priceOption.weight
+
+        if (productType === "weight-based" && weight) {
+            return `${item.name} (${weight}g)`
+        } else if (productType === "packet") {
+            return `${item.name} (Packet)`
+        }
+        return item.name
+    }
+
     const generatePDF = () => {
         if (!currentOrder) return
 
@@ -245,10 +258,11 @@ export default function Orders() {
         doc.text(`${currentOrder.shippingAddress.city}, ${currentOrder.shippingAddress.postalCode}`, 120, 69)
         doc.text(`${currentOrder.shippingAddress.country}`, 120, 76)
 
-        // Order items table
-        const tableColumn = ["Product", "Quantity", "Price", "Total"]
+        // Order items table with product type information
+        const tableColumn = ["Product", "Type", "Quantity", "Price", "Total"]
         const tableRows = currentOrder.items.map((item) => [
             item.name,
+            item.priceOption.type === "weight-based" ? `Weight (${item.priceOption.weight}g)` : "Packet",
             item.quantity.toString(),
             `$${item.priceOption?.price ? item.priceOption.price.toFixed(2) : "0.00"}`,
             `$${item.priceOption?.price ? (item.quantity * item.priceOption.price).toFixed(2) : "0.00"}`,
@@ -527,6 +541,7 @@ export default function Orders() {
                                                                         <TableHeader>
                                                                             <TableRow>
                                                                                 <TableHead>Product</TableHead>
+                                                                                <TableHead>Type</TableHead>
                                                                                 <TableHead>Quantity</TableHead>
                                                                                 <TableHead>Price</TableHead>
                                                                                 <TableHead>Total</TableHead>
@@ -546,14 +561,24 @@ export default function Orders() {
                                                                                             )}
                                                                                             <div>
                                                                                                 <div className="font-medium">{item.name}</div>
-                                                                                                {item.priceOption && (
-                                                                                                    <div className="text-xs text-muted-foreground">
-                                                                                                        {item.priceOption.type === "weight-based" && item.priceOption.weight
-                                                                                                            ? `${item.priceOption.weight}g`
-                                                                                                            : "Packet"}
-                                                                                                    </div>
-                                                                                                )}
                                                                                             </div>
+                                                                                        </div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <div className="flex items-center gap-1">
+                                                                                            {item.priceOption.type === "weight-based" ? (
+                                                                                                <>
+                                                                                                    <Scale className="h-4 w-4 text-gray-500" />
+                                                                                                    <span className="font-medium">
+                                                                                                        Weight ({item.priceOption.weight}g)
+                                                                                                    </span>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <>
+                                                                                                    <Package className="h-4 w-4 text-gray-500" />
+                                                                                                    <span className="font-medium">Packet</span>
+                                                                                                </>
+                                                                                            )}
                                                                                         </div>
                                                                                     </TableCell>
                                                                                     <TableCell>{item.quantity}</TableCell>

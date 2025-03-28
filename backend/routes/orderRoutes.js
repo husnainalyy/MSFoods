@@ -2,11 +2,11 @@ import express from 'express';
 import {
     orderController
 } from '../controllers/orderController.js';
-import { protect, admin  } from '../middlewares/auth.js';
+import { protect, admin, optionalAuth  } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-router.post('/', orderController.createOrder);
+router.post('/', optionalAuth, orderController.createOrder);
 router.get('/my-orders', protect, orderController.getUserOrders);
 router.get('/', protect, admin, orderController.getAllOrders);
 router.get('/sales', protect, admin, orderController.getSalesStats);

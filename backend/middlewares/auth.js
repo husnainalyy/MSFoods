@@ -26,3 +26,19 @@ export const admin = (req, res, next) => {
     };
     handleError(res, 403, 'Not authorized as admin');
 };
+
+// middlewares/auth.js
+export const optionalAuth = async (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
+            req.user = await User.findById(decoded.id).select('-password');
+        } catch (error) {
+            // Don't block the request, just don't set req.user
+            console.log('Invalid token, proceeding as guest');
+        }
+    }
+    next();
+};

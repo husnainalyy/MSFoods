@@ -7,15 +7,26 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { useCart } from "@/app/Component/CartContext"
-import { useUser } from "@/app/Component/user-context" // Fixed case sensitivity
+import { useUser } from "@/app/Component/user-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/components/ui/use-toast"
-import { CreditCard, Truck, ShieldCheck, ArrowLeft, CheckCircle2, ChevronDown, ChevronUp, Tag } from "lucide-react"
+import {
+    CreditCard,
+    Truck,
+    ShieldCheck,
+    ArrowLeft,
+    CheckCircle2,
+    ChevronDown,
+    ChevronUp,
+    Tag,
+    AlertCircle,
+} from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import Cookies from "js-cookie"
 
 const API_URL =
@@ -23,7 +34,7 @@ const API_URL =
 
 export default function CheckoutPage() {
     const { cart, getTotalItems, getTotalPrice, clearCart } = useCart()
-    const { user } = useUser()
+    const { user, isAuthenticated } = useUser()
     const router = useRouter()
     const { toast } = useToast()
     const [isSubmitting, setIsSubmitting] = useState(false)
@@ -90,7 +101,6 @@ export default function CheckoutPage() {
         setFormData((prev) => ({ ...prev, [name]: value }))
     }
 
-    // Update the handleApplyCoupon function to include the authorization header
     const handleApplyCoupon = async () => {
         if (!couponCode.trim()) {
             toast({
@@ -100,17 +110,30 @@ export default function CheckoutPage() {
             return
         }
 
+        // Check if user is authenticated before applying coupon
+        if (!isAuthenticated) {
+            toast({
+                title: "Authentication Required",
+                description: "Please log in to apply a coupon code",
+                variant: "destructive",
+            })
+            return
+        }
+
         try {
             setIsSubmitting(true)
 
             // Get the access token
-            const accessToken = localStorage.getItem("accessToken") || Cookies.get("accessToken") || user?.accessToken || ""
+            const accessToken = user?.accessToken || localStorage.getItem("accessToken") || Cookies.get("accessToken") || ""
+
+            if (!accessToken) {
+                throw new Error("Authentication required to apply coupon")
+            }
 
             const response = await fetch(`${API_URL}/api/coupons/validate`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    // Add Authorization header with the token
                     Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify({ code: couponCode, cartTotal: subtotal }),
@@ -140,7 +163,6 @@ export default function CheckoutPage() {
         }
     }
 
-    // Also update the handleSubmit function to include the authorization header
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsSubmitting(true)
@@ -152,6 +174,11 @@ export default function CheckoutPage() {
 
             if (missingFields.length > 0) {
                 throw new Error(`Missing required fields: ${missingFields.join(", ")}`)
+            }
+
+            // Check if user is authenticated when using coupon
+            if (couponApplied && !isAuthenticated) {
+                throw new Error("Authentication required to use coupon. Please log in.")
             }
 
             // Prepare order items
@@ -182,15 +209,14 @@ export default function CheckoutPage() {
             }
 
             // Get the access token
-            const accessToken = localStorage.getItem("accessToken") || Cookies.get("accessToken") || user?.accessToken || ""
+            const accessToken = user?.accessToken || localStorage.getItem("accessToken") || Cookies.get("accessToken") || ""
 
             // Create order
             const response = await fetch(`${API_URL}/api/orders`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    // Add Authorization header with the token
-                    Authorization: `Bearer ${accessToken}`,
+                    ...(user ? { Authorization: `Bearer ${accessToken}` } : {}) // Only send token if logged in
                 },
                 body: JSON.stringify(orderData),
                 credentials: "include",
@@ -205,7 +231,7 @@ export default function CheckoutPage() {
                 window.location.href = data.data.paymentResult.redirectUrl
             } else {
                 clearCart()
-                router.push("/checkout/success")
+                router.push("/user/checkout/success")
             }
         } catch (error) {
             toast({
@@ -255,6 +281,21 @@ export default function CheckoutPage() {
 
                 <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
 
+                {/* Authentication warning for coupon usage */}
+                {!isAuthenticated && (
+                    <Alert variant="warning" className="mb-6">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Authentication Required for Coupons</AlertTitle>
+                        <AlertDescription>
+                            You need to{" "}
+                            <Link href="/login" className="font-medium underline">
+                                log in
+                            </Link>{" "}
+                            to apply or use coupon codes.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 {/* Order Summary - Mobile Only (Top) */}
                 <div className="lg:hidden mb-6">
                     <OrderSummaryCollapsible
@@ -271,6 +312,7 @@ export default function CheckoutPage() {
                         handleApplyCoupon={handleApplyCoupon}
                         handleRemoveCoupon={handleRemoveCoupon}
                         isSubmitting={isSubmitting}
+                        isAuthenticated={isAuthenticated}
                     />
                 </div>
 
@@ -398,6 +440,7 @@ export default function CheckoutPage() {
                                 handleApplyCoupon={handleApplyCoupon}
                                 handleRemoveCoupon={handleRemoveCoupon}
                                 isSubmitting={isSubmitting}
+                                isAuthenticated={isAuthenticated}
                             />
 
                             <Button
@@ -441,6 +484,7 @@ interface OrderSummaryProps {
     handleApplyCoupon: () => void
     handleRemoveCoupon: () => void
     isSubmitting: boolean
+    isAuthenticated: boolean
 }
 
 function OrderSummaryCollapsible({
@@ -457,6 +501,7 @@ function OrderSummaryCollapsible({
     handleApplyCoupon,
     handleRemoveCoupon,
     isSubmitting,
+    isAuthenticated,
 }: OrderSummaryProps) {
     return (
         <div className="bg-gray-50 rounded-lg border border-gray-200">
@@ -518,7 +563,7 @@ function OrderSummaryCollapsible({
                                         placeholder="Enter coupon code"
                                         value={couponCode}
                                         onChange={(e) => setCouponCode(e.target.value)}
-                                        disabled={couponApplied || isSubmitting}
+                                        disabled={couponApplied || isSubmitting || !isAuthenticated}
                                     />
                                 </div>
                                 {couponApplied ? (
@@ -530,12 +575,13 @@ function OrderSummaryCollapsible({
                                         type="button"
                                         onClick={handleApplyCoupon}
                                         className="bg-purple-600 hover:bg-purple-700"
-                                        disabled={isSubmitting}
+                                        disabled={isSubmitting || !isAuthenticated}
                                     >
                                         {isSubmitting ? "..." : "Apply"}
                                     </Button>
                                 )}
                             </div>
+                            {!isAuthenticated && <p className="mt-2 text-xs text-amber-600">Please log in to use coupon codes</p>}
                             {couponApplied && (
                                 <div className="mt-2 flex items-center text-sm text-green-600">
                                     <Tag className="h-4 w-4 mr-1" />
