@@ -127,6 +127,28 @@ userSchema.pre('save', async function (next) {
     next();
 });
 
+userSchema.pre('save', async function (next) {
+    // Ensure the isVerified status remains the same during update
+    if (this.isModified('isVerified') && this.isNew === false) {
+        // Do not change the isVerified status if it's being updated
+        this.isVerified = this.isVerified;
+    }
+
+    // Handle soft delete
+    if (this.isModified('isDeleted') && this.isDeleted) {
+        this.deletedAt = Date.now();
+        // Anonymize data
+        this.name = 'Deleted User';
+        this.email = `deleted-${this._id}@example.com`;
+        this.phone = null;
+        this.addresses = [];
+        this.refreshToken = undefined;
+    }
+
+    next();
+});
+
+
 userSchema.pre('save', function (next) {
     // Prevent duplicate null values
     if (!this.email) this.email = undefined;
